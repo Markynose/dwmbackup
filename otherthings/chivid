@@ -1,0 +1,9 @@
+#!/bin/sh
+# chivid — minimal video player (ffplay wrapper)
+
+[ -z "$1" ] && { printf "usage: chivid <file>\n" >&2; exit 1; }
+
+exec ffplay -loglevel quiet \
+    -autoexit \
+    -x 1280 -y 720 \
+    "$@"

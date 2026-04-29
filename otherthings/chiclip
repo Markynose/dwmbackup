@@ -1,0 +1,48 @@
+#!/bin/sh
+# chiclip — clipboard history via dmenu
+
+HISTFILE="${XDG_DATA_HOME:-$HOME/.local/share}/chiclip/history"
+MAX=50
+
+mkdir -p "$(dirname "$HISTFILE")"
+touch "$HISTFILE"
+
+case "${1:-}" in
+add)
+    # called by chiclipd to add current clipboard to history
+    entry=$(xclip -selection clipboard -o 2>/dev/null) || exit 0
+    [ -z "$entry" ] && exit 0
+    # skip if same as last entry
+    last=$(head -1 "$HISTFILE" 2>/dev/null)
+    [ "$entry" = "$last" ] && exit 0
+    # prepend, deduplicate, trim to MAX
+    tmp=$(mktemp)
+    printf '%s\n' "$entry" > "$tmp"
+    grep -vxF "$entry" "$HISTFILE" >> "$tmp" 2>/dev/null
+    head -n "$MAX" "$tmp" > "$HISTFILE"
+    rm -f "$tmp"
+    ;;
+daemon)
+    # poll clipboard every second and add new entries
+    prev=""
+    while true; do
+        cur=$(xclip -selection clipboard -o 2>/dev/null)
+        if [ -n "$cur" ] && [ "$cur" != "$prev" ]; then
+            "$0" add
+            prev="$cur"
+        fi
+        sleep 1
+    done
+    ;;
+clear)
+    > "$HISTFILE"
+    printf "clipboard history cleared\n"
+    ;;
+*)
+    # show history in dmenu, paste selected
+    [ -s "$HISTFILE" ] || exit 0
+    chosen=$(cat "$HISTFILE" | dmenu -l 10 -p "clip:")
+    [ -z "$chosen" ] && exit 0
+    printf '%s' "$chosen" | xclip -selection clipboard
+    ;;
+esac

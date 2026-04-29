@@ -1,0 +1,50 @@
+#!/bin/sh
+# chilauncher — dmenu launcher with flatpak support
+
+CACHEDIR="${XDG_CACHE_HOME:-$HOME/.cache}/chilauncher"
+APPMAP="$CACHEDIR/flatpak.map"  # name<TAB>id
+
+mkdir -p "$CACHEDIR"
+
+# Rebuild flatpak name→id map
+build_flatpak_map() {
+    > "$APPMAP"
+    for f in /var/lib/flatpak/exports/share/applications/*.desktop \
+              ~/.local/share/flatpak/exports/share/applications/*.desktop; do
+        [ -f "$f" ] || continue
+        id=$(basename "$f" .desktop)
+        name=$(grep '^Name=' "$f" 2>/dev/null | head -1 | cut -d= -f2-)
+        [ -n "$name" ] && printf '%s\t%s\n' "$name" "$id" >> "$APPMAP"
+    done
+}
+
+# PATH executables (portable, no stest needed)
+path_bins() {
+    IFS=:
+    for dir in $PATH; do
+        [ -d "$dir" ] || continue
+        for f in "$dir"/*; do
+            [ -x "$f" ] && [ -f "$f" ] && printf '%s\n' "${f##*/}"
+        done
+    done
+    unset IFS
+}
+
+build_flatpak_map
+
+chosen=$(
+    {
+        path_bins
+        [ -s "$APPMAP" ] && awk -F'\t' '{printf "[F] %s\n", $1}' "$APPMAP"
+    } | sort -u | dmenu -i -p "run:" -nb "#1e1224" -nf "#f0b8d0" -sb "#c9479b" -sf "#ffffff"
+)
+
+[ -z "$chosen" ] && exit 0
+
+if [ "${chosen#\[F\] }" != "$chosen" ]; then
+    name="${chosen#\[F\] }"
+    id=$(awk -F'\t' -v n="$name" '$1==n{print $2; exit}' "$APPMAP")
+    [ -n "$id" ] && flatpak run "$id" &
+else
+    sh -c "$chosen &"
+fi

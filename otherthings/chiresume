@@ -1,0 +1,15 @@
+#!/bin/sh
+# chiresume — lock screen before suspend (locked on wake)
+# Listens for elogind PrepareForSleep signal via dbus-monitor
+
+dbus-monitor --system \
+  "type='signal',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" \
+  2>/dev/null | \
+while read -r line; do
+  case "$line" in
+    *"boolean true"*)
+      # system going to sleep — lock now so it's locked on wake
+      doas env XAUTHORITY="$XAUTHORITY" chilock &
+      ;;
+  esac
+done

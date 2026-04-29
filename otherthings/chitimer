@@ -1,0 +1,32 @@
+#!/bin/sh
+# chitimer — countdown timer; shows remaining time in dwmstatus
+# usage: chitimer <minutes>
+#        chitimer stop
+
+TIMERFILE=/tmp/chitimer
+
+case "${1:-}" in
+stop)
+    rm -f "$TIMERFILE"
+    exit 0
+    ;;
+"")
+    printf "usage: chitimer <minutes> | stop\n" >&2
+    exit 1
+    ;;
+esac
+
+mins=$1
+secs=$((mins * 60))
+
+while [ "$secs" -gt 0 ]; do
+    m=$((secs / 60))
+    s=$((secs % 60))
+    printf 'timer: %d:%02d\n' "$m" "$s" > "$TIMERFILE"
+    sleep 1
+    secs=$((secs - 1))
+done
+
+printf 'timer: done!\n' > "$TIMERFILE"
+sleep 10
+rm -f "$TIMERFILE"

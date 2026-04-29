@@ -1,0 +1,275 @@
+#!/usr/bin/env python3
+# chibreakcalc — breakcore calculator
+
+import math, random, time, os, sys, readline
+import array, struct, threading, subprocess, shutil
+
+GLITCH = ["░▒▓", "▓▒░", "█▀▄", "▄▀█", "╫╪╬", "⚡☢☣", "◈◉◎", "▚▞▟▙"]
+COLORS = ["\033[31m", "\033[32m", "\033[33m", "\033[34m", "\033[35m", "\033[36m", "\033[91m", "\033[92m", "\033[93m", "\033[95m"]
+PINK   = "\033[1;35m"
+RESET  = "\033[0m"
+BOLD   = "\033[1m"
+
+bpm = random.randint(160, 300)
+start = time.time()
+
+def glitch_text(text):
+    out = ""
+    for c in str(text):
+        if random.random() < 0.15:
+            out += random.choice(random.choice(GLITCH))
+        else:
+            out += c
+    return out
+
+def noise_line():
+    col = random.choice(COLORS)
+    length = random.randint(10, 50)
+    chars = random.choice(GLITCH)
+    return col + "".join(random.choice(chars) for _ in range(length)) + RESET
+
+def current_bpm():
+    drift = random.randint(-5, 5)
+    return bpm + drift
+
+def banner():
+    os.system("clear")
+    print(noise_line())
+    print(f"{PINK}{BOLD}  chibreakcalc v0.2 [{current_bpm()} BPM]{RESET}")
+    print(noise_line())
+    print(f"  {random.choice(COLORS)}MATH IS PAIN MATH IS CHAOS MATH IS BREAKCORE{RESET}")
+    print(noise_line())
+    print()
+
+def corrupt_result(result):
+    lines = []
+    for _ in range(random.randint(2, 5)):
+        val = f"{random.uniform(-9999, 9999):.4f}"
+        lines.append(f"  {random.choice(COLORS)}{glitch_text(val)}{RESET}")
+    real_pos = random.randint(0, len(lines))
+    col = random.choice(COLORS)
+    lines.insert(real_pos, f"  {PINK}{BOLD}>>> {result} <<<{RESET}  {col}{''.join(random.choice('░▒▓█') for _ in range(random.randint(3,8)))}{RESET}")
+    return "\n".join(lines)
+
+# ── AUDIO ENGINE ─────────────────────────────────────────────────────────────
+
+SR = 22050  # sample rate
+
+_music_stop  = threading.Event()
+_music_thread = None
+_player_cmd  = None
+
+def _find_player():
+    for cmd in [
+        ["pw-cat", "--playback", f"--rate={SR}", "--channels=1", "--format=s16", "-"],
+        ["paplay", "--raw", f"--rate={SR}", "--channels=1", "--format=s16le", "-"],
+        ["aplay", "-r", str(SR), "-c", "1", "-f", "S16_LE", "-"],
+    ]:
+        if shutil.which(cmd[0]):
+            return cmd
+    return None
+
+def _mk_kick():
+    n = int(SR * 0.25)
+    buf = [0.0] * n
+    for i in range(n):
+        t = i / SR
+        freq = 80.0 * math.exp(-t * 25)
+        env  = math.exp(-t * 12)
+        buf[i] = env * math.sin(2 * math.pi * freq * t)
+    return buf
+
+def _mk_snare(rng):
+    n = int(SR * 0.12)
+    buf = [0.0] * n
+    for i in range(n):
+        t = i / SR
+        env = math.exp(-t * 35)
+        buf[i] = env * (rng.gauss(0, 1) * 0.75 + math.sin(2 * math.pi * 185 * t) * 0.25)
+    return buf
+
+def _mk_hat(rng):
+    n = int(SR * 0.025)
+    buf = [0.0] * n
+    for i in range(n):
+        t = i / SR
+        env = math.exp(-t * 100)
+        buf[i] = env * rng.gauss(0, 1)
+    return buf
+
+def _mk_bass(freq):
+    n = int(SR * 0.18)
+    buf = [0.0] * n
+    for i in range(n):
+        t = i / SR
+        env = math.exp(-t * 8)
+        s = (math.sin(2*math.pi*freq*t)
+           + math.sin(2*math.pi*freq*3*t) / 3
+           + math.sin(2*math.pi*freq*5*t) / 5)
+        buf[i] = env * s * 0.35
+    return buf
+
+def _distort(x, amt):
+    k = 1.0 + amt * 8.0
+    return math.tanh(x * k) / math.tanh(k)
+
+def _gen_bar(bar_bpm, seed, base_freq, dist):
+    rng = random.Random(seed)
+    step_n = max(1, int(SR * 60 / bar_bpm / 4))
+    bar_n  = step_n * 16
+    buf    = [0.0] * bar_n
+
+    kick  = _mk_kick()
+    snare = _mk_snare(rng)
+    hat   = _mk_hat(rng)
+    bass  = _mk_bass(base_freq)
+
+    K = [1,0,0,0, 0,0,1,0, 1,0,0,0, 0,1,0,0]
+    S = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0]
+    H = [1,1,0,1, 1,1,0,1, 1,1,0,1, 1,1,0,1]
+    B = [1,0,0,1, 0,0,1,0, 1,0,0,0, 0,1,0,0]
+
+    for i in range(16):
+        if rng.random() < 0.25: K[i] ^= 1
+        if rng.random() < 0.15: S[i] ^= 1
+        if rng.random() < 0.10: H[i] ^= 1
+        if rng.random() < 0.30: B[i] ^= 1
+
+    def mix(pat, wave, vol):
+        for step, on in enumerate(pat):
+            if not on:
+                continue
+            start_idx = step * step_n
+            for j in range(len(wave)):
+                idx = start_idx + j
+                if idx >= bar_n:
+                    break
+                buf[idx] += wave[j] * vol
+
+    mix(K, kick,  0.90)
+    mix(S, snare, 0.60)
+    mix(H, hat,   0.40)
+    mix(B, bass,  0.55)
+
+    peak = max(abs(x) for x in buf) or 1.0
+    out = array.array('h', (
+        max(-32767, min(32767, int(_distort(x / peak, dist) * 32000)))
+        for x in buf
+    ))
+    return out.tobytes()
+
+def _music_loop(bar_bpm, seed, base_freq, dist):
+    cur_seed = seed
+    while not _music_stop.is_set():
+        bar = _gen_bar(bar_bpm, cur_seed, base_freq, dist)
+        try:
+            proc = subprocess.Popen(
+                _player_cmd, stdin=subprocess.PIPE,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            proc.stdin.write(bar)
+            proc.stdin.close()
+            proc.wait()
+        except Exception:
+            break
+        # evolve seed each bar so pattern drifts
+        cur_seed = (cur_seed * 1103515245 + 12345) & 0x7fffffff
+
+def start_music(result, bar_bpm):
+    global _music_thread, _player_cmd
+
+    stop_music()
+
+    if _player_cmd is None:
+        _player_cmd = _find_player()
+    if _player_cmd is None:
+        return False
+
+    _music_stop.clear()
+
+    try:
+        val = float(result)
+    except (TypeError, ValueError):
+        val = 42.0
+
+    seed      = abs(int(val * 997)) % (2**31 - 1) or 1
+    semitones = abs(int(val * 7)) % 36          # 3-octave range A1–A4
+    base_freq = 55.0 * (2 ** (semitones / 12))
+    dist      = min(0.92, abs(math.sin(val)) * 0.75 + 0.15)
+
+    _music_thread = threading.Thread(
+        target=_music_loop, args=(bar_bpm, seed, base_freq, dist), daemon=True
+    )
+    _music_thread.start()
+    return True
+
+def stop_music():
+    global _music_thread
+    _music_stop.set()
+    if _music_thread and _music_thread.is_alive():
+        _music_thread.join(timeout=2.0)
+    _music_thread = None
+
+# ── MAIN ─────────────────────────────────────────────────────────────────────
+
+env = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
+env["ans"] = 0
+
+banner()
+
+while True:
+    try:
+        glyph = random.choice("▓▒░█")
+        col   = random.choice(COLORS)
+        prompt = f"\001{col}\002{glyph}\001{RESET}\002\001{PINK}\002>\001{RESET}\002 "
+        line = input(prompt).strip()
+    except (EOFError, KeyboardInterrupt):
+        print(f"\n{noise_line()}")
+        print(f"  {PINK}GOODBYE. THE BEAT GOES ON.{RESET}")
+        print(noise_line())
+        stop_music()
+        break
+
+    if not line:
+        print(noise_line())
+        continue
+
+    if line in ("quit", "exit", "q"):
+        print(f"\n{noise_line()}")
+        print(f"  {PINK}GOODBYE. THE BEAT GOES ON.{RESET}")
+        stop_music()
+        break
+
+    if line == "chaos":
+        banner()
+        continue
+
+    if line == "stop":
+        stop_music()
+        print(f"  {PINK}beat killed.{RESET}")
+        continue
+
+    try:
+        result = eval(line, {"__builtins__": {}}, env)
+        env["ans"] = result
+        time.sleep(random.uniform(0.05, 0.2))
+        print(noise_line())
+        print(corrupt_result(result))
+        print(noise_line())
+        cbpm = current_bpm()
+        print(f"  {random.choice(COLORS)}[{cbpm} BPM]{RESET}")
+
+        started = start_music(result, cbpm)
+        if started:
+            try:
+                val = float(result)
+                semi = abs(int(val * 7)) % 36
+                freq = 55.0 * (2 ** (semi / 12))
+                dist = min(0.92, abs(math.sin(val)) * 0.75 + 0.15)
+                print(f"  {PINK}♫ {freq:.1f}Hz  dist:{dist:.2f}  seed:{abs(int(val*997)) % (2**31-1) or 1}{RESET}")
+            except Exception:
+                print(f"  {PINK}♫ beat locked{RESET}")
+    except Exception as e:
+        print(noise_line())
+        print(f"  {random.choice(COLORS)}{glitch_text(str(e))}{RESET}")
+        print(noise_line())

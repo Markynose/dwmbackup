@@ -1,0 +1,27 @@
+#!/bin/sh
+# chinotes — quick persistent notes via dmenu
+
+NOTESDIR="${XDG_DATA_HOME:-$HOME/.local/share}/chinotes"
+NOTESFILE="$NOTESDIR/notes"
+DMENU_ARGS="-nb #1e1224 -nf #f0b8d0 -sb #c9479b -sf #ffffff"
+
+mkdir -p "$NOTESDIR"
+touch "$NOTESFILE"
+
+case "${1:-}" in
+add)
+    note=$(printf "" | dmenu -p "note:" $DMENU_ARGS)
+    [ -z "$note" ] && exit 0
+    printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M')" "$note" >> "$NOTESFILE"
+    ;;
+clear)
+    printf "" | dmenu -p "clear all notes? (type yes)" $DMENU_ARGS | grep -qx "yes" \
+        && > "$NOTESFILE"
+    ;;
+*)
+    [ -s "$NOTESFILE" ] || { printf "" | dmenu -p "no notes" $DMENU_ARGS; exit 0; }
+    chosen=$(tac "$NOTESFILE" | dmenu -l 15 -p "notes:" $DMENU_ARGS)
+    [ -z "$chosen" ] && exit 0
+    printf '%s' "$chosen" | xclip -selection clipboard
+    ;;
+esac

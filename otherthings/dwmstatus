@@ -1,0 +1,230 @@
+#!/bin/sh
+# dwmstatus — wifi | vol | bright | battery | time
+# usage: dwmstatus              → daemon mode
+#        dwmstatus vol up/down/mute
+#        dwmstatus bright up/down
+
+# ensure pipewire can be found when spawned from dwm
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# find backlight on T460
+BACKLIGHT=""
+for bl in /sys/class/backlight/intel_backlight \
+          /sys/class/backlight/acpi_video0 \
+          /sys/class/backlight/thinkpad_screen; do
+	[ -d "$bl" ] && BACKLIGHT="$bl" && break
+done
+
+battery() {
+	total=0; count=0; charging=""
+	for b in BAT0 BAT1; do
+		[ -d "/sys/class/power_supply/$b" ] || continue
+		cap=$(cat /sys/class/power_supply/$b/capacity 2>/dev/null)
+		status=$(cat /sys/class/power_supply/$b/status 2>/dev/null)
+		[ -z "$cap" ] && continue
+		total=$((total + cap)); count=$((count + 1))
+		[ "$status" = "Charging" ] && charging="+"
+	done
+	[ "$count" -eq 0 ] && echo "no bat" && return
+	avg=$((total / count))
+	if [ -z "$charging" ]; then
+		if [ "$avg" -le 10 ]; then
+			tick=$(date +%S)
+			odd=$((tick % 2))
+			[ "$odd" -eq 0 ] && echo "!!! bat: ${avg}% !!!" || echo "bat: ${avg}%"
+			return
+		elif [ "$avg" -le 20 ]; then
+			echo "! bat: ${avg}%"
+			return
+		fi
+	fi
+	echo "bat: ${avg}%${charging}"
+}
+
+wifi() {
+	for iface in wlp3s0 wlan0 wlp2s0 wlp4s0; do
+		[ -d "/sys/class/net/$iface" ] || continue
+		info=$(iw dev "$iface" link 2>/dev/null)
+		ssid=$(echo "$info" | awk '/SSID:/{print $2}')
+		if [ -n "$ssid" ]; then
+			sig=$(echo "$info" | awk '/signal:/{print $2}')
+			if [ -n "$sig" ]; then
+				bars=$(awk -v s="$sig" 'BEGIN{
+					if (s >= -50) print "▂▄▆█"
+					else if (s >= -65) print "▂▄▆_"
+					else if (s >= -75) print "▂▄__"
+					else print "▂___"
+				}')
+				echo "wifi: $ssid $bars"
+			else
+				echo "wifi: $ssid"
+			fi
+		else
+			echo "wifi: off"
+		fi
+		return
+	done
+	echo "no wifi"
+}
+
+volume() {
+	out=$(wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null) || { echo "vol: ?"; return; }
+	echo "$out" | awk '{
+		pct = int($2 * 100)
+		if ($3 == "[MUTED]") print "vol: mute"
+		else print "vol: " pct "%"
+	}'
+}
+
+brightness() {
+	[ -z "$BACKLIGHT" ] && return
+	cur=$(cat "$BACKLIGHT/brightness" 2>/dev/null) || return
+	max=$(cat "$BACKLIGHT/max_brightness" 2>/dev/null) || return
+	echo "bright: $((cur * 100 / max))%"
+}
+
+cputemp() {
+	for zone in /sys/class/thermal/thermal_zone*/temp; do
+		[ -f "$zone" ] || continue
+		t=$(cat "$zone" 2>/dev/null)
+		[ -z "$t" ] && continue
+		t=$((t / 1000))
+		if [ "$t" -ge 80 ]; then
+			tick=$(date +%S)
+			[ $(( tick % 2 )) -eq 0 ] && printf "!!! %d°C !!!" "$t" || printf "%d°C" "$t"
+			# (always shows temp, only !!! flashes)
+		else
+			printf "%d°C" "$t"
+		fi
+		return
+	done
+}
+
+kblayout() {
+	chikblayout 2>/dev/null
+}
+
+binclock() {
+	h=$(date +%H | awk '{print $1+0}')
+	m=$(date +%M | awk '{print $1+0}')
+	hbin=""; mbin=""
+	for i in 4 3 2 1 0; do
+		bit=$(( (h >> i) & 1 ))
+		[ "$bit" -eq 1 ] && hbin="${hbin}●" || hbin="${hbin}○"
+	done
+	for i in 5 4 3 2 1 0; do
+		bit=$(( (m >> i) & 1 ))
+		[ "$bit" -eq 1 ] && mbin="${mbin}●" || mbin="${mbin}○"
+	done
+	printf "%s %s" "$hbin" "$mbin"
+}
+
+batttime() {
+	[ -f /tmp/chi_batttime ] || return
+	for b in BAT0 BAT1; do
+		[ -d "/sys/class/power_supply/$b" ] || continue
+		status=$(cat /sys/class/power_supply/$b/status 2>/dev/null)
+		en=$(cat /sys/class/power_supply/$b/energy_now 2>/dev/null)
+		ef=$(cat /sys/class/power_supply/$b/energy_full 2>/dev/null)
+		pw=$(cat /sys/class/power_supply/$b/power_now 2>/dev/null)
+		if [ -n "$en" ] && [ -n "$pw" ] && [ "$pw" -gt 0 ]; then
+			if [ "$status" = "Discharging" ]; then
+				mins=$(( en * 60 / pw ))
+			elif [ "$status" = "Charging" ] && [ -n "$ef" ]; then
+				mins=$(( (ef - en) * 60 / pw ))
+			else
+				return
+			fi
+			printf "%dh%02dm" $((mins/60)) $((mins%60))
+			return
+		fi
+		cn=$(cat /sys/class/power_supply/$b/charge_now 2>/dev/null)
+		cf=$(cat /sys/class/power_supply/$b/charge_full 2>/dev/null)
+		cu=$(cat /sys/class/power_supply/$b/current_now 2>/dev/null)
+		if [ -n "$cn" ] && [ -n "$cu" ] && [ "$cu" -gt 0 ]; then
+			if [ "$status" = "Discharging" ]; then
+				mins=$(( cn * 60 / cu ))
+			elif [ "$status" = "Charging" ] && [ -n "$cf" ]; then
+				mins=$(( (cf - cn) * 60 / cu ))
+			else
+				return
+			fi
+			printf "%dh%02dm" $((mins/60)) $((mins%60))
+			return
+		fi
+	done
+}
+
+timer() {
+	[ -f /tmp/chitimer ] && cat /tmp/chitimer
+}
+
+nexttodo() {
+	f="${XDG_DATA_HOME:-$HOME/.local/share}/chitodo/todos"
+	[ -s "$f" ] || return
+	sort "$f" | head -1
+}
+
+update_bar() {
+	b=$(brightness)
+	t=$(cputemp)
+	td=$(nexttodo)
+	tm=$(timer)
+	kb=$(kblayout)
+	base="$(wifi)  |  $(volume)"
+	[ -n "$b" ]  && base="$base  |  $b"
+	[ -n "$t" ]  && base="$base  |  $t"
+	bt=$(batttime)
+	base="$base  |  $(battery)"
+	[ -n "$bt" ] && base="$base ($bt)"
+	base="$base  |  $kb  |  $(date '+%H:%M')"
+	[ -n "$td" ] && base="$base  |  todo: $td"
+	[ -n "$tm" ] && base="$base  |  $tm"
+	xsetroot -name "$base"
+}
+
+# --- adjustment commands ---
+case "$1" in
+vol)
+	case "$2" in
+	up)   wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ ;;
+	down) wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- ;;
+	mute) wpctl set-mute   @DEFAULT_AUDIO_SINK@ toggle ;;
+	*)    echo "usage: dwmstatus vol up|down|mute" >&2; exit 1 ;;
+	esac
+	update_bar
+	exit
+	;;
+batttime-toggle)
+	if [ -f /tmp/chi_batttime ]; then
+		rm -f /tmp/chi_batttime
+	else
+		touch /tmp/chi_batttime
+	fi
+	update_bar
+	exit
+	;;
+bright)
+	[ -z "$BACKLIGHT" ] && echo "no backlight found" >&2 && exit 1
+	cur=$(cat "$BACKLIGHT/brightness")
+	max=$(cat "$BACKLIGHT/max_brightness")
+	step=$((max / 10))
+	[ "$step" -lt 1 ] && step=1
+	case "$2" in
+	up)   new=$((cur + step)) ;;
+	down) new=$((cur - step)) ;;
+	*)    echo "usage: dwmstatus bright up|down" >&2; exit 1 ;;
+	esac
+	[ "$new" -gt "$max" ] && new=$max
+	[ "$new" -lt 1 ]      && new=1
+	echo "$new" > "$BACKLIGHT/brightness"
+	update_bar
+	exit
+	;;
+esac
+
+# --- daemon mode ---
+while true; do
+	update_bar
+	sleep 5
+done

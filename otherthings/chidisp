@@ -1,0 +1,86 @@
+#!/bin/sh
+# chidisp — display configurator via dmenu
+
+DMENU_ARGS="-nb #1e1224 -nf #f0b8d0 -sb #c9479b -sf #ffffff"
+
+# get connected outputs
+connected=$(xrandr --query | awk '/ connected/{print $1}')
+count=$(printf '%s\n' "$connected" | wc -l)
+
+if [ "$count" -lt 1 ]; then
+	printf "" | dmenu -p "no displays found" $DMENU_ARGS
+	exit 1
+fi
+
+# internal display (eDP or LVDS)
+internal=$(printf '%s\n' "$connected" | grep -E '^(eDP|LVDS)' | head -1)
+# external displays
+externals=$(printf '%s\n' "$connected" | grep -vE '^(eDP|LVDS)')
+
+# build menu options
+options=""
+
+# only internal
+[ -n "$internal" ] && options="only: $internal\n"
+
+# only external / per external
+for ext in $externals; do
+	options="${options}only: $ext\n"
+done
+
+# extend options (internal + each external)
+if [ -n "$internal" ]; then
+	for ext in $externals; do
+		options="${options}extend: $internal + $ext (right)\n"
+		options="${options}extend: $ext + $internal (right)\n"
+		options="${options}mirror: $internal + $ext\n"
+	done
+fi
+
+# off options
+for ext in $externals; do
+	options="${options}off: $ext\n"
+done
+
+chosen=$(printf "$options" | dmenu -l 15 -p "display:" $DMENU_ARGS)
+[ -z "$chosen" ] && exit 0
+
+apply_only() {
+	out="$1"
+	for o in $connected; do
+		if [ "$o" = "$out" ]; then
+			xrandr --output "$o" --auto
+		else
+			xrandr --output "$o" --off
+		fi
+	done
+}
+
+case "$chosen" in
+only:*)
+	out=$(printf '%s' "$chosen" | awk '{print $2}')
+	apply_only "$out"
+	;;
+extend:*right*)
+	# "extend: A + B (right)" → B is right of A
+	a=$(printf '%s' "$chosen" | awk '{print $2}')
+	b=$(printf '%s' "$chosen" | awk '{print $4}')
+	xrandr --output "$a" --auto --output "$b" --right-of "$a" --auto
+	;;
+mirror:*)
+	a=$(printf '%s' "$chosen" | awk '{print $2}')
+	b=$(printf '%s' "$chosen" | awk '{print $4}')
+	xrandr_out=$(xrandr)
+	modes_a=$(printf '%s\n' "$xrandr_out" | awk -v out="$a" '$0~out" "{f=1;next} f&&/^ /{match($0,/[0-9]+x[0-9]+/);print substr($0,RSTART,RLENGTH);next} f&&!/^ /{exit}')
+	modes_b=$(printf '%s\n' "$xrandr_out" | awk -v out="$b" '$0~out" "{f=1;next} f&&/^ /{match($0,/[0-9]+x[0-9]+/);print substr($0,RSTART,RLENGTH);next} f&&!/^ /{exit}')
+	res=$(printf '%s\n' "$modes_a" | while read m; do
+		printf '%s\n' "$modes_b" | grep -qx "$m" && printf '%s\n' "$m" && break
+	done)
+	[ -z "$res" ] && res=$(printf '%s\n' "$modes_a" | head -1)
+	xrandr --output "$a" --mode "$res" --output "$b" --same-as "$a" --mode "$res"
+	;;
+off:*)
+	out=$(printf '%s' "$chosen" | awk '{print $2}')
+	xrandr --output "$out" --off
+	;;
+esac

@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+# chiadvcalc — advanced calculator with history and variables
+
+import math, cmath, readline, os, sys
+
+PINK   = "\033[1;35m"
+CYAN   = "\033[1;36m"
+GREEN  = "\033[1;32m"
+RED    = "\033[1;31m"
+RESET  = "\033[0m"
+
+HISTORY_FILE = os.path.expanduser("~/.chiadvcalc_history")
+
+env = {k: getattr(math, k) for k in dir(math) if not k.startswith("_")}
+env.update({k: getattr(cmath, k) for k in dir(cmath) if not k.startswith("_")})
+env["ans"] = 0
+
+def banner():
+    print(f"{PINK}chiadvcalc{RESET} — advanced calculator")
+    print(f"{CYAN}  math functions: sin, cos, tan, sqrt, log, exp, pi, e, ...{RESET}")
+    print(f"{CYAN}  complex numbers: 1+2j, cmath.phase(), ...{RESET}")
+    print(f"{CYAN}  variables: x = 5, y = x * 2{RESET}")
+    print(f"{CYAN}  ans: last result | quit/exit to leave{RESET}")
+    print()
+
+def main():
+    try:
+        readline.read_history_file(HISTORY_FILE)
+    except FileNotFoundError:
+        pass
+    readline.set_history_length(500)
+
+    banner()
+
+    while True:
+        try:
+            line = input(f"\001{PINK}\002>\001{RESET}\002 ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not line:
+            continue
+        if line in ("quit", "exit", "q"):
+            break
+        if line == "clear":
+            os.system("clear")
+            banner()
+            continue
+        if line == "vars":
+            user_vars = {k: v for k, v in env.items()
+                         if not callable(v) and k not in dir(math) and k != "ans"}
+            user_vars["ans"] = env["ans"]
+            for k, v in user_vars.items():
+                print(f"  {CYAN}{k}{RESET} = {v}")
+            continue
+
+        try:
+            if "=" in line and not any(op in line for op in ["==", "!=", "<=", ">="]):
+                name, expr = line.split("=", 1)
+                name = name.strip()
+                result = eval(expr.strip(), {"__builtins__": {}}, env)
+                env[name] = result
+                env["ans"] = result
+                print(f"  {GREEN}{name} = {result}{RESET}")
+            else:
+                result = eval(line, {"__builtins__": {}}, env)
+                env["ans"] = result
+                print(f"  {GREEN}{result}{RESET}")
+        except Exception as e:
+            print(f"  {RED}error: {e}{RESET}")
+
+    readline.write_history_file(HISTORY_FILE)
+
+if __name__ == "__main__":
+    main()

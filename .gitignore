@@ -1,0 +1,12 @@
+# compiled binaries
+drw.o
+*.o
+dwm
+tags
+otherthings/chigesture
+
+# rust build artifacts
+otherthings/chiqemu/target/
+
+# claude
+.claude/

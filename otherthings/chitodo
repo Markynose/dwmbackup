@@ -1,0 +1,34 @@
+#!/bin/sh
+# chitodo — quick todo list via dmenu
+# format: optional "YYYY-MM-DD " prefix for date-sorted display
+
+TODODIR="${XDG_DATA_HOME:-$HOME/.local/share}/chitodo"
+TODOFILE="$TODODIR/todos"
+DMENU_ARGS="-nb #1e1224 -nf #f0b8d0 -sb #c9479b -sf #ffffff"
+
+mkdir -p "$TODODIR"
+touch "$TODOFILE"
+
+case "${1:-}" in
+add)
+    item=$(printf "" | dmenu -p "todo:" $DMENU_ARGS)
+    [ -z "$item" ] && exit 0
+    printf '%s\n' "$item" >> "$TODOFILE"
+    ;;
+done)
+    [ -s "$TODOFILE" ] || exit 0
+    chosen=$(sort "$TODOFILE" | grep -v '^$' | dmenu -l 15 -p "done:" $DMENU_ARGS | tr -d '\r\n')
+    [ -z "$chosen" ] && exit 0
+    awk -v item="$chosen" 'NF && $0 != item' "$TODOFILE" > "$TODOFILE.tmp"; mv "$TODOFILE.tmp" "$TODOFILE"
+    ;;
+next)
+    [ -s "$TODOFILE" ] || exit 0
+    sort "$TODOFILE" | grep -v '^$' | head -1
+    ;;
+*)
+    [ -s "$TODOFILE" ] || { printf "" | dmenu -p "no todos" $DMENU_ARGS; exit 0; }
+    chosen=$(sort "$TODOFILE" | grep -v '^$' | dmenu -l 15 -p "todo:" $DMENU_ARGS)
+    [ -z "$chosen" ] && exit 0
+    printf '%s' "$chosen" | xclip -selection clipboard
+    ;;
+esac

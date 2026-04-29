@@ -1,0 +1,19 @@
+#!/bin/sh
+# chiproc — dmenu process killer
+
+sel=$(ps -eo pid,pcpu,pmem,comm 2>/dev/null \
+      | tail -n +2 \
+      | sort -k2 -rn \
+      | awk '$4 !~ /^(Xorg|dwm|pipewire|wireplumber|dinit|dbus|chiproc)$/ \
+             {printf "%6s  cpu:%-5s mem:%-5s %s\n", $1, $2, $3, $4}' \
+      | dmenu -i -l 20 -p "kill:")
+
+[ -z "$sel" ] && exit 0
+
+pid=$(echo "$sel" | awk '{print $1}')
+name=$(echo "$sel" | awk '{print $NF}')
+
+sig=$(printf "TERM\nKILL\nHUP\nINT" | dmenu -i -p "signal ($name $pid):")
+[ -z "$sig" ] && exit 0
+
+kill -"$sig" "$pid"

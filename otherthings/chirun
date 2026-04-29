@@ -1,0 +1,15 @@
+#!/bin/sh
+# chirun — dmenu command prompt, output in st
+
+cmd=$(echo "" | dmenu -p ">")
+[ -z "$cmd" ] && exit 0
+
+st -t "chirun" -e sh -c "
+echo \"\\033[1;35m\$ $cmd\\033[0m\"
+echo
+$cmd
+rc=\$?
+echo
+printf '\\033[2m--- exit %s  (enter to close) ---\\033[0m' \"\$rc\"
+read _
+"

@@ -1,0 +1,52 @@
+#!/bin/sh
+# chikeys — show dwm keybinds in a floating terminal
+
+cat << 'EOF'
+dwm keybinds
+============
+
+APPS
+  Super+Enter        terminal (st)
+  Super+R            launcher (dmenu)
+  Super+E            file manager (nnn)
+  Super+B            browser (firefox)
+  Super+`            scratchpad
+  Super+Shift+C      calculator (dmenu)
+  Super+C            clipboard history
+  Super+Print        screenshot
+  Super+Shift+Print  region screenshot
+
+WINDOWS
+  Super+Q            close window
+  Super+Space        toggle floating
+  Super+J/K          focus next/prev
+  Super+Shift+Enter  promote to master
+  Super+H/L          shrink/expand master
+  Super+I/D          add/remove master slots
+
+LAYOUTS
+  Super+T            tiling
+  Super+M            monocle
+  Super+V            floating
+  Super+F            this cheatsheet :)
+
+TAGS
+  Super+1-9          go to workspace
+  Super+Shift+1-9    move window to workspace
+  Super+0            view all tags
+  Super+Shift+0      pin to all tags
+  Super+Tab          last tag
+
+MEDIA
+  Fn+Vol Up/Down     volume
+  Fn+Mute            mute
+  Fn+Bright Up/Down  brightness
+
+SESSION
+  Super+Shift+E      quit dwm
+  Super+Shift+R      reboot
+  Super+Shift+P      poweroff
+  Super+P            toggle bar
+
+press q to close
+EOF

@@ -1,0 +1,613 @@
+#!/bin/sh
+# chitools — Chimera Linux / ThiccPad local management CLI
+
+DWM_SRC="/home/mark/dwm-src"
+ST_SRC="/home/mark/st"
+DMENU_SRC="/home/mark/dmenu"
+DWM_CFG="/home/mark/dwm"
+MUSL_INTERP="/lib/ld-musl-x86_64.so.1"
+
+RED='\033[1;31m'
+YEL='\033[1;33m'
+PNK='\033[1;35m'
+CYN='\033[1;36m'
+GRN='\033[1;32m'
+RST='\033[0m'
+
+die() { printf "${RED}error:${RST} %s\n" "$*" >&2; exit 1; }
+ok()  { printf "${GRN}ok:${RST} %s\n" "$*"; }
+hdr() { printf "${PNK}==> %s${RST}\n" "$*"; }
+
+IS_ROOT=0
+[ "$(id -u)" -eq 0 ] && IS_ROOT=1
+
+if [ "$IS_ROOT" -eq 1 ]; then
+	printf "${RED}Root detected. Be careful. Ok?${RST}\n\n"
+fi
+
+need_root() {
+	[ "$IS_ROOT" -eq 1 ] || die "no root, no install — run with: doas chitools $cmd $*"
+}
+
+# --- commands ---
+
+pkill_bin() { pkill "$1" 2>/dev/null || true; }
+
+cmd_build() {
+	[ -z "${1:-}" ] && { usage; exit 1; }
+	for target in "$@"; do
+	case "$target" in
+	dwm)
+		hdr "Building dwm..."
+		need_root
+		cp "$DWM_CFG/config.h" "$DWM_SRC/config.h" || die "config.h not found"
+		cd "$DWM_SRC" && bmake && bmake install && ok "dwm installed"
+		;;
+	st)
+		hdr "Building st..."
+		need_root
+		cp "$DWM_CFG/otherthings/st/config.h" "$ST_SRC/config.h" || die "st config.h not found"
+		cd "$ST_SRC" && bmake && bmake install && ok "st installed"
+		;;
+	dmenu)
+		hdr "Building dmenu..."
+		need_root
+		cp "$DWM_CFG/otherthings/dmenu/config.h" "$DMENU_SRC/config.h" || die "dmenu config.h not found"
+		cd "$DMENU_SRC" && bmake && bmake install && ok "dmenu installed"
+		;;
+	chifetch)
+		hdr "Building chifetch..."
+		need_root
+		cc -std=c99 -O2 -Wall -o /tmp/chifetch "$DWM_CFG/otherthings/fetch/chifetch.c" \
+			&& cp /tmp/chifetch /usr/local/bin/chifetch \
+			&& ok "chifetch installed"
+		;;
+	dwmstatus)
+		hdr "Installing dwmstatus..."
+		need_root
+		cp "$DWM_CFG/otherthings/dwmstatus" /usr/local/bin/dwmstatus \
+			&& chmod +x /usr/local/bin/dwmstatus \
+			&& ok "dwmstatus installed"
+		;;
+	chikeys)
+		hdr "Installing chikeys..."
+		need_root
+		cp "$DWM_CFG/otherthings/chikeys" /usr/local/bin/chikeys \
+			&& chmod +x /usr/local/bin/chikeys \
+			&& ok "chikeys installed"
+		;;
+	chicalc)
+		hdr "Installing chicalc..."
+		need_root
+		cp "$DWM_CFG/otherthings/chicalc" /usr/local/bin/chicalc \
+			&& chmod +x /usr/local/bin/chicalc \
+			&& ok "chicalc installed"
+		;;
+	chiadvcalc)
+		hdr "Installing chiadvcalc..."
+		need_root
+		cp "$DWM_CFG/otherthings/chiadvcalc" /usr/local/bin/chiadvcalc \
+			&& chmod +x /usr/local/bin/chiadvcalc \
+			&& ok "chiadvcalc installed"
+		;;
+	chivid)
+		hdr "Installing chivid..."
+		need_root
+		cp "$DWM_CFG/otherthings/chivid" /usr/local/bin/chivid \
+			&& chmod +x /usr/local/bin/chivid \
+			&& ok "chivid installed"
+		;;
+	chiview)
+		hdr "Building chiview..."
+		need_root
+		pkill_bin chiview
+		cc -O2 -Wall -o /tmp/chiview "$DWM_CFG/otherthings/chiview.c" \
+			-lX11 -lImlib2 \
+			&& cp /tmp/chiview /usr/local/bin/chiview \
+			&& ok "chiview installed"
+		;;
+	chitop)
+		hdr "Building chitop..."
+		need_root
+		pkill_bin chitop
+		cc -O2 -Wall -o /tmp/chitop "$DWM_CFG/otherthings/chitop.c" -lncurses \
+			&& cp /tmp/chitop /usr/local/bin/chitop \
+			&& ok "chitop installed"
+		;;
+	chinotes)
+		hdr "Installing chinotes..."
+		need_root
+		cp "$DWM_CFG/otherthings/chinotes" /usr/local/bin/chinotes \
+			&& chmod +x /usr/local/bin/chinotes \
+			&& ok "chinotes installed"
+		;;
+	chifm)
+		hdr "Building chifm..."
+		need_root
+		pkill_bin chifm
+		cc -O2 -Wall -o /tmp/chifm "$DWM_CFG/otherthings/chifm.c" -lncurses \
+			&& cp /tmp/chifm /usr/local/bin/chifm \
+			&& ok "chifm installed"
+		;;
+	chilauncher)
+		hdr "Installing chilauncher..."
+		need_root
+		cp "$DWM_CFG/otherthings/chilauncher" /usr/local/bin/chilauncher \
+			&& chmod +x /usr/local/bin/chilauncher \
+			&& ok "chilauncher installed"
+		;;
+	chiclip)
+		hdr "Installing chiclip..."
+		need_root
+		cp "$DWM_CFG/otherthings/chiclip" /usr/local/bin/chiclip \
+			&& chmod +x /usr/local/bin/chiclip \
+			&& ok "chiclip installed"
+		;;
+	chitodo)
+		hdr "Installing chitodo..."
+		need_root
+		cp "$DWM_CFG/otherthings/chitodo" /usr/local/bin/chitodo \
+			&& chmod +x /usr/local/bin/chitodo \
+			&& ok "chitodo installed"
+		;;
+	chiman)
+		hdr "Installing chiman..."
+		need_root
+		cp "$DWM_CFG/otherthings/chiman" /usr/local/bin/chiman \
+			&& chmod +x /usr/local/bin/chiman \
+			&& ok "chiman installed"
+		;;
+	chitimer)
+		hdr "Installing chitimer..."
+		need_root
+		cp "$DWM_CFG/otherthings/chitimer" /usr/local/bin/chitimer \
+			&& chmod +x /usr/local/bin/chitimer \
+			&& ok "chitimer installed"
+		;;
+	chikblayout)
+		hdr "Building chikblayout..."
+		need_root
+		cc -O2 -Wall -o /tmp/chikblayout "$DWM_CFG/otherthings/chikblayout.c" -lX11 \
+			&& cp /tmp/chikblayout /usr/local/bin/chikblayout \
+			&& ok "chikblayout installed"
+		;;
+	chilayout)
+		hdr "Installing chilayout..."
+		need_root
+		cp "$DWM_CFG/otherthings/chilayout" /usr/local/bin/chilayout \
+			&& chmod +x /usr/local/bin/chilayout \
+			&& ok "chilayout installed"
+		;;
+	chioverview)
+		hdr "Building chioverview..."
+		need_root
+		pkill_bin chioverview
+		cc -O2 -Wall -o /tmp/chioverview "$DWM_CFG/otherthings/chioverview.c" -lX11 \
+			&& cp /tmp/chioverview /usr/local/bin/chioverview \
+			&& ok "chioverview installed"
+		;;
+	chidisp)
+		hdr "Installing chidisp..."
+		need_root
+		cp "$DWM_CFG/otherthings/chidisp" /usr/local/bin/chidisp \
+			&& chmod +x /usr/local/bin/chidisp \
+			&& ok "chidisp installed"
+		;;
+	chimusic)
+		hdr "Building chimusic..."
+		need_root
+		pkill_bin chimusic
+		cc -O2 -Wall -o /tmp/chimusic "$DWM_CFG/otherthings/chimusic.c" -lncurses \
+			&& cp /tmp/chimusic /usr/local/bin/chimusic \
+			&& ok "chimusic installed"
+		;;
+	chied)
+		hdr "Building chied..."
+		need_root
+		pkill_bin chied
+		cc -O2 -Wall -o /tmp/chied "$DWM_CFG/otherthings/chied.c" \
+			&& cp /tmp/chied /usr/local/bin/chied \
+			&& ok "chied installed"
+		;;
+	chiwallpaper)
+		hdr "Building chiwallpaper..."
+		need_root
+		pkill_bin chiwallpaper
+		cc -O2 -Wall -o /tmp/chiwallpaper "$DWM_CFG/otherthings/chiwallpaper.c" \
+			-lX11 -lImlib2 \
+			&& cp /tmp/chiwallpaper /usr/local/bin/chiwallpaper \
+			&& ok "chiwallpaper installed"
+		;;
+	chiqemu)
+		hdr "Building chiqemu..."
+		need_root
+		pkill_bin chiqemu
+		cd "$DWM_CFG/otherthings/chiqemu" \
+			&& su mark -c '/home/mark/.cargo/bin/cargo build --release' \
+			&& cp target/release/chiqemu /usr/local/bin/chiqemu \
+			&& ok "chiqemu installed"
+		;;
+	chiresume)
+		hdr "Installing chiresume..."
+		need_root
+		pkill_bin chiresume
+		cp "$DWM_CFG/otherthings/chiresume" /usr/local/bin/chiresume \
+			&& chmod +x /usr/local/bin/chiresume \
+			&& ok "chiresume installed"
+		;;
+	chiidle)
+		hdr "Building chiidle..."
+		need_root
+		pkill_bin chiidle
+		cc -O2 -Wall -o /tmp/chiidle "$DWM_CFG/otherthings/chiidle.c" \
+			-lX11 -lXss \
+			&& cp /tmp/chiidle /usr/local/bin/chiidle \
+			&& ok "chiidle installed"
+		;;
+	chirun)
+		hdr "Installing chirun..."
+		need_root
+		cp "$DWM_CFG/otherthings/chirun" /usr/local/bin/chirun \
+			&& chmod +x /usr/local/bin/chirun \
+			&& ok "chirun installed"
+		;;
+	chiproc)
+		hdr "Installing chiproc..."
+		need_root
+		cp "$DWM_CFG/otherthings/chiproc" /usr/local/bin/chiproc \
+			&& chmod +x /usr/local/bin/chiproc \
+			&& ok "chiproc installed"
+		;;
+	chilock)
+		hdr "Building chilock..."
+		need_root
+		pkill_bin chilock
+		cc -O2 -Wall $(pkgconf --cflags xft) \
+			-o /tmp/chilock "$DWM_CFG/otherthings/chilock.c" \
+			-lX11 -lXft -lcrypt \
+			&& cp /tmp/chilock /usr/local/bin/chilock \
+			&& ok "chilock installed"
+		;;
+	chisniff)
+		hdr "Building chisniff..."
+		need_root
+		pkill_bin chisniff
+		cc -O2 -Wall -o /tmp/chisniff "$DWM_CFG/otherthings/chisniff.c" -lncurses -lpcap \
+			&& cp /tmp/chisniff /usr/local/bin/chisniff \
+			&& ok "chisniff installed"
+		;;
+	chiharden)
+		hdr "Installing chiharden..."
+		need_root
+		cp "$DWM_CFG/otherthings/chiharden" /usr/local/bin/chiharden \
+			&& chmod +x /usr/local/bin/chiharden \
+			&& ok "chiharden installed"
+		;;
+	chitools)
+		hdr "Installing chitools..."
+		need_root
+		cp "$DWM_CFG/otherthings/chitools" /usr/local/bin/chitools \
+			&& chmod +x /usr/local/bin/chitools \
+			&& ok "chitools installed"
+		;;
+	all)
+		cmd_build dwm
+		cmd_build st
+		cmd_build dmenu
+		cmd_build chifetch
+		cmd_build dwmstatus
+		cmd_build chikeys
+		cmd_build chicalc
+		cmd_build chiadvcalc
+		cmd_build chivid
+		cmd_build chiview
+		cmd_build chitop
+		cmd_build chinotes
+		cmd_build chifm
+		cmd_build chilauncher
+		cmd_build chiclip
+		cmd_build chiwallpaper
+		cmd_build chitodo
+		cmd_build chiman
+		cmd_build chitimer
+		cmd_build chikblayout
+		cmd_build chilayout
+		cmd_build chioverview
+		cmd_build chidisp
+		cmd_build chimusic
+		cmd_build chied
+		cmd_build chiqemu
+		cmd_build chiharden
+		cmd_build chirun
+		cmd_build chiproc
+		cmd_build chiidle
+		cmd_build chiresume
+		cmd_build chilock
+		cmd_build chisniff
+		cmd_build chitools
+		;;
+	*)
+		die "unknown target: $target — valid: dwm|st|dmenu|chifetch|dwmstatus|chikeys|chicalc|chiadvcalc|chivid|chiview|chitop|chinotes|chifm|chilauncher|chiclip|chiwallpaper|chitodo|chiman|chitimer|chied|chimusic|chidisp|chikblayout|chilayout|chioverview|chiqemu|chiharden|chilock|chisniff|chitools|all"
+		;;
+	esac
+	done
+}
+
+cmd_status() {
+	hdr "ThiccPad status"
+	printf "  uptime:  "; awk '{printf "%d min\n", $1/60}' /proc/uptime
+	printf "  load:    "; awk '{print $1, $2, $3}' /proc/loadavg
+	printf "  mem:     "; awk '/MemAvailable/{a=$2} /MemTotal/{t=$2} END{printf "%d MB free / %d MB total\n", a/1024, t/1024}' /proc/meminfo
+	printf "  disk:    "; df -h / | awk 'NR==2{print $4" free of "$2}'
+	printf "  bat:     "
+	total=0; count=0; charging=""
+	for b in BAT0 BAT1; do
+		[ -d "/sys/class/power_supply/$b" ] || continue
+		cap=$(cat /sys/class/power_supply/$b/capacity 2>/dev/null)
+		status=$(cat /sys/class/power_supply/$b/status 2>/dev/null)
+		[ -z "$cap" ] && continue
+		total=$((total + cap)); count=$((count + 1))
+		[ "$status" = "Charging" ] && charging="+"
+	done
+	[ "$count" -gt 0 ] && printf "%d%%%s\n" $((total / count)) "$charging" || printf "n/a\n"
+
+	printf "  wifi:    "
+	for iface in wlp3s0 wlan0 wlp2s0 wlp4s0; do
+		[ -d "/sys/class/net/$iface" ] || continue
+		ssid=$(iw dev "$iface" link 2>/dev/null | awk '/SSID:/{print $2}')
+		[ -n "$ssid" ] && printf "%s (%s)\n" "$ssid" "$iface" || printf "disconnected (%s)\n" "$iface"
+		break
+	done
+}
+
+cmd_patch_musl() {
+	bin="${1:-}"
+	[ -z "$bin" ] && die "usage: chitools patch-musl <binary>"
+	[ -f "$bin" ] || die "file not found: $bin"
+	command -v patchelf >/dev/null 2>&1 || die "patchelf not installed — doas apk add patchelf"
+
+	hdr "Patching $bin for musl..."
+	old=$(patchelf --print-interpreter "$bin" 2>/dev/null || printf "none")
+	printf "  old: %s\n" "$old"
+	patchelf --set-interpreter "$MUSL_INTERP" "$bin" \
+		&& printf "  new: %s\n" "$MUSL_INTERP" \
+		&& ok "patched $bin"
+}
+
+cmd_font() {
+	action="${1:-list}"
+	case "$action" in
+	list)
+		hdr "Installed fonts"
+		fc-list | sort
+		;;
+	cache)
+		hdr "Rebuilding font cache..."
+		fc-cache -fv && ok "done"
+		;;
+	install)
+		url="${2:-}"
+		[ -z "$url" ] && die "usage: chitools font install <url.zip>"
+		hdr "Installing font from $url..."
+		mkdir -p ~/.local/share/fonts
+		cd ~/.local/share/fonts
+		curl -OL "$url"
+		unzip -o "$(basename "$url")"
+		fc-cache -fv && ok "font installed"
+		;;
+	*)
+		die "font: unknown action (list|cache|install <url>)"
+		;;
+	esac
+}
+
+cmd_wifi() {
+	action="${1:-list}"; shift 2>/dev/null
+	case "$action" in
+	list)
+		hdr "Available networks"
+		nmcli -f SSID,BARS,SECURITY device wifi list
+		;;
+	connect)
+		ssid="${1:-}"; [ -z "$ssid" ] && die "usage: chitools wifi connect <ssid> [password]"
+		pass="${2:-}"
+		if [ -n "$pass" ]; then
+			nmcli device wifi connect "$ssid" password "$pass" && ok "connected to $ssid"
+		else
+			nmcli device wifi connect "$ssid" && ok "connected to $ssid"
+		fi
+		;;
+	disconnect)
+		nmcli device disconnect wlp3s0 2>/dev/null \
+			|| nmcli device disconnect wlan0 2>/dev/null \
+			&& ok "disconnected"
+		;;
+	status)
+		nmcli device status
+		;;
+	on)  nmcli radio wifi on  && ok "wifi on" ;;
+	off) nmcli radio wifi off && ok "wifi off" ;;
+	*)   die "wifi: unknown action (list|connect|disconnect|status|on|off)" ;;
+	esac
+}
+
+cmd_eth() {
+	action="${1:-status}"
+	case "$action" in
+	status)
+		hdr "Ethernet status"
+		for iface in eth0 enp0s25 enp1s0 eno1; do
+			[ -d "/sys/class/net/$iface" ] || continue
+			state=$(cat /sys/class/net/$iface/operstate 2>/dev/null)
+			printf "  %s: %s\n" "$iface" "$state"
+		done
+		nmcli device status | grep ethernet
+		;;
+	connect)
+		nmcli device connect enp0s25 2>/dev/null \
+			|| nmcli device connect eth0 2>/dev/null \
+			&& ok "ethernet connected"
+		;;
+	disconnect)
+		nmcli device disconnect enp0s25 2>/dev/null \
+			|| nmcli device disconnect eth0 2>/dev/null \
+			&& ok "ethernet disconnected"
+		;;
+	*)   die "eth: unknown action (status|connect|disconnect)" ;;
+	esac
+}
+
+cmd_service() {
+	action="${1:-}"; name="${2:-}"
+	[ -z "$action" ] || [ -z "$name" ] && die "usage: chitools service <start|stop|status> <name>"
+	case "$action" in
+	start)  need_root; dinitctl start "$name"  && ok "started $name" ;;
+	stop)   need_root; dinitctl stop "$name"   && ok "stopped $name" ;;
+	status) dinitctl status "$name" ;;
+	*)      die "service: unknown action (start|stop|status)" ;;
+	esac
+}
+
+cmd_wallpaper() {
+	action="${1:-set}"
+	case "$action" in
+	set)
+		file="${2:-}"
+		[ -z "$file" ] && die "usage: chitools wallpaper set <file>"
+		[ -f "$file" ] || die "file not found: $file"
+		ext="${file##*.}"
+		cp "$file" ~/.wallpaper
+		case "$ext" in
+		gif|GIF) chiwallpaper -g ~/.wallpaper & ok "wallpaper set (animated)" ;;
+		*)       chiwallpaper ~/.wallpaper    && ok "wallpaper set" ;;
+		esac
+		;;
+	apply)
+		[ -f ~/.wallpaper ] || die "no wallpaper saved — run: chitools wallpaper set <file>"
+		chiwallpaper ~/.wallpaper && ok "wallpaper applied"
+		;;
+	clear)
+		rm -f ~/.wallpaper && xsetroot -solid "#1e1224" && ok "wallpaper cleared"
+		;;
+	*)
+		die "wallpaper: unknown action (set <file>|apply|clear)"
+		;;
+	esac
+}
+
+cmd_audio() {
+	action="${1:-list}"; [ -n "${1:-}" ] && shift
+	export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+	case "$action" in
+	list)
+		hdr "Audio sinks"
+		wpctl status | awk '/Sinks:/{f=1;next} f&&/Sources:/{exit} f&&/[0-9]+\./{print}'
+		;;
+	set)
+		id="${1:-}"; [ -z "$id" ] && die "usage: chitools audio set <sink-id>"
+		wpctl set-default "$id" && ok "default sink → $id"
+		;;
+	status)
+		hdr "Current default sink"
+		wpctl status | awk '/Sinks:/{f=1;next} f&&/Sources:/{exit} f&&/\*/{print;exit}'
+		;;
+	*)
+		die "audio: unknown action (list|set <id>|status)"
+		;;
+	esac
+}
+
+cmd_update() {
+	hdr "Updating system packages..."
+	need_root
+	apk upgrade || die "apk upgrade failed"
+	ok "system updated"
+
+	hdr "Applying hardware fixes..."
+	# T460 Skylake: SOF driver takes priority but fails; force legacy HDA
+	echo "options snd_intel_dspcfg dsp_driver=1" > /etc/modprobe.d/snd-hda.conf
+	ok "audio: T460 HDA driver pinned"
+}
+
+cmd_fix() {
+	action="${1:-}"; [ -n "${1:-}" ] && shift
+	case "$action" in
+	audio)
+		hdr "Fixing audio..."
+		need_root
+		# Ensure HDA driver is forced (T460 Skylake SOF conflict)
+		echo "options snd_intel_dspcfg dsp_driver=1" > /etc/modprobe.d/snd-hda.conf
+		ok "modprobe config written"
+
+		# Restart pipewire stack as the user (not root)
+		hdr "Restarting pipewire..."
+		printf '#!/bin/sh\npkill wireplumber; pkill pipewire-pulse; pkill pipewire; sleep 1\nXDG_RUNTIME_DIR="/run/user/$(id -u)"\npipewire >/dev/null 2>&1 &\nsleep 0.5; pipewire-pulse >/dev/null 2>&1 &\nsleep 0.5; wireplumber >/dev/null 2>&1 &\nsleep 2; wpctl status\n' > /tmp/chi-fix-audio.sh
+		chmod +x /tmp/chi-fix-audio.sh
+		su mark -c '/tmp/chi-fix-audio.sh' 2>/dev/null | grep -A6 "Sinks:"
+		ok "pipewire restarted — check sinks above"
+		printf "${YEL}note:${RST} if still dummy output, reboot to reload kernel modules\n"
+		;;
+	*)
+		die "fix: unknown target (audio)"
+		;;
+	esac
+}
+
+cmd_pkg() {
+	action="${1:-}"; shift
+	[ -z "$action" ] && die "usage: chitools pkg <search|install|remove|upgrade> [name]"
+	case "$action" in
+	search)  apk search "$@" ;;
+	install) need_root; apk add "$@" && ok "installed: $*" ;;
+	remove)  need_root; apk del "$@" && ok "removed: $*" ;;
+	upgrade) need_root; apk upgrade && ok "system upgraded" ;;
+	*)       die "pkg: unknown action (search|install|remove|upgrade)" ;;
+	esac
+}
+
+usage() {
+	printf "${PNK}chitools${RST} — Chimera Linux management CLI\n\n"
+	printf "  ${CYN}status${RST}                     system info (uptime, mem, bat, wifi)\n"
+	printf "  ${CYN}build${RST} <target>             build+install (dwm|st|dmenu|chifetch|dwmstatus|all)\n"
+	printf "  ${CYN}patch-musl${RST} <bin>           patch ELF interpreter to musl\n"
+	printf "  ${CYN}font${RST} list                  list installed fonts\n"
+	printf "  ${CYN}font${RST} cache                 rebuild fc-cache\n"
+	printf "  ${CYN}font${RST} install <url.zip>     download and install a font zip\n"
+	printf "  ${CYN}wifi${RST} list                  scan for networks\n"
+	printf "  ${CYN}wifi${RST} connect <ssid> [pass]  connect to network\n"
+	printf "  ${CYN}wifi${RST} disconnect             disconnect\n"
+	printf "  ${CYN}wifi${RST} status                 show device status\n"
+	printf "  ${CYN}wifi${RST} on|off                 toggle wifi radio\n"
+	printf "  ${CYN}eth${RST} status                 ethernet status\n"
+	printf "  ${CYN}eth${RST} connect|disconnect      manage ethernet\n"
+	printf "  ${CYN}service${RST} <start|stop|status> <name>   manage dinit services\n"
+	printf "  ${CYN}audio${RST} list                  list audio sinks\n"
+	printf "  ${CYN}audio${RST} set <id>              set default sink\n"
+	printf "  ${CYN}audio${RST} status                show current default sink\n"
+	printf "  ${CYN}pkg${RST} <search|install|remove|upgrade> [name]   apk wrapper\n"
+	printf "  ${CYN}wallpaper${RST} set <file>          set wallpaper (saves to ~/.wallpaper)\n"
+	printf "  ${CYN}wallpaper${RST} apply               re-apply saved wallpaper\n"
+	printf "  ${CYN}wallpaper${RST} clear               remove wallpaper (solid bg)\n"
+	printf "  ${CYN}update${RST}                     apk upgrade + re-apply hardware fixes\n"
+	printf "  ${CYN}fix${RST} audio                  restart pipewire + fix T460 HDA driver\n"
+}
+
+cmd="${1:-}"
+[ -n "$cmd" ] && shift
+
+case "$cmd" in
+status)      cmd_status ;;
+build)       cmd_build "$@" ;;
+patch-musl)  cmd_patch_musl "$@" ;;
+font)        cmd_font "$@" ;;
+wifi)        cmd_wifi "$@" ;;
+eth)         cmd_eth "$@" ;;
+service)     cmd_service "$@" ;;
+pkg)         cmd_pkg "$@" ;;
+wallpaper)   cmd_wallpaper "$@" ;;
+audio)       cmd_audio "$@" ;;
+update)      cmd_update ;;
+fix)         cmd_fix "$@" ;;
+help|--help|-h|"") usage ;;
+*)           die "unknown command: $cmd (run 'chitools help')" ;;
+esac

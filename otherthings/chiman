@@ -1,0 +1,17 @@
+#!/bin/sh
+# chiman — fuzzy man page picker via dmenu
+
+DMENU_ARGS="-nb #1e1224 -nf #f0b8d0 -sb #c9479b -sf #ffffff"
+
+chosen=$(apropos . 2>/dev/null | sort -u | dmenu -l 20 -p "man:" $DMENU_ARGS)
+[ -z "$chosen" ] && exit 0
+
+# parse "name(section) - description" → extract name and section
+page=$(printf '%s' "$chosen" | awk -F'[( ]' '{print $1}')
+section=$(printf '%s' "$chosen" | awk -F'[()]' '{print $2}' | awk '{print $1}')
+
+if [ -n "$section" ]; then
+    st -e man "$section" "$page"
+else
+    st -e man "$page"
+fi
