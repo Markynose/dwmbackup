@@ -4,6 +4,21 @@
 
 set -e
 
+echo "==> Adding Arch Linux repos..."
+if ! grep -q '\[extra\]' /etc/pacman.conf; then
+	curl -o /etc/pacman.d/mirrorlist-arch \
+		'https://archlinux.org/mirrorlist/?country=all&protocol=https&use_mirror_status=on'
+	sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist-arch
+	cat >> /etc/pacman.conf << 'EOF'
+
+[extra]
+Include = /etc/pacman.d/mirrorlist-arch
+EOF
+	echo "Arch extra repo added."
+else
+	echo "Arch extra repo already present, skipping."
+fi
+
 echo "==> Syncing and installing dependencies..."
 pacman -Syu --noconfirm
 pacman -S --noconfirm --needed \
