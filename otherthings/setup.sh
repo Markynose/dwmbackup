@@ -1,21 +1,28 @@
 #!/bin/sh
-# setup.sh — fresh Chimera Linux install on ThiccPad T460
-# run as root after Chimera install
+# setup.sh — fresh Artix Linux (dinit) install on ThiccPad T460
+# run as root after Artix install
 
 set -e
 
-echo "==> Installing dependencies..."
-apk add \
-	git curl unzip bash pkgconf \
+echo "==> Syncing and installing dependencies..."
+pacman -Syu --noconfirm
+pacman -S --noconfirm --needed \
+	base-devel git curl unzip pkgconf \
 	clang bmake \
-	ncurses-devel libxft-devel libxinerama-devel libx11-devel \
-	freetype-devel imlib2-devel chimerautils-devel readline-devel \
-	libpcap-devel libxscrnsaver-devel \
-	xinit xserver-xorg xserver-xorg-input-libinput xclip \
-	pipewire pipewire-alsa pipewire-pulse \
+	ncurses libxft libxinerama libx11 \
+	freetype2 imlib2 readline \
+	libpcap libxscrnsaver \
+	xorg-xinit xorg-server xf86-input-libinput xclip \
+	pipewire pipewire-alsa pipewire-pulse wireplumber \
 	firefox gnome-screenshot \
-	openssh python3 \
-	ffmpeg-ffplay iw dbus
+	openssh python iw dbus \
+	opendoas elogind networkmanager \
+	elogind-dinit networkmanager-dinit openssh-dinit
+
+echo "==> Enabling dinit services..."
+ln -sf /etc/dinit.d/dbus        /etc/dinit.d/boot.d/dbus
+ln -sf /etc/dinit.d/elogind     /etc/dinit.d/boot.d/elogind
+ln -sf /etc/dinit.d/NetworkManager /etc/dinit.d/boot.d/NetworkManager
 
 echo "==> Applying T460 hardware fixes..."
 # Skylake: SOF driver takes priority but fails; force legacy HDA
@@ -30,12 +37,13 @@ usermod -aG video,wheel,network,audio,kvm,plugdev mark
 
 echo "==> Setting up doas..."
 echo "permit nopass :wheel" > /etc/doas.conf
+chmod 0400 /etc/doas.conf
 
 echo "==> Installing oksh..."
 rm -rf /tmp/oksh
 git clone https://github.com/ibara/oksh.git /tmp/oksh
 cd /tmp/oksh
-./configure && bmake && bmake install
+./configure && make && make install
 echo /usr/local/bin/oksh >> /etc/shells
 chsh -s /usr/local/bin/oksh mark
 cd -
@@ -85,7 +93,9 @@ echo "==> Building all chi tools..."
 
 echo "==> Setting up xinitrc..."
 cat > /home/mark/.xinitrc << 'EOF'
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 pipewire &
+wireplumber &
 pipewire-pulse &
 chilayout &
 dwmstatus &

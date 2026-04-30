@@ -1,11 +1,11 @@
 #!/bin/sh
-# chitools — Chimera Linux / ThiccPad local management CLI
+# chitools — Artix Linux (dinit) / ThiccPad local management CLI
 
 DWM_SRC="/home/mark/dwm-src"
 ST_SRC="/home/mark/st"
 DMENU_SRC="/home/mark/dmenu"
+SXWM_SRC="/home/mark/sxwm"
 DWM_CFG="/home/mark/dwm"
-MUSL_INTERP="/lib/ld-musl-x86_64.so.1"
 
 RED='\033[1;31m'
 YEL='\033[1;33m'
@@ -37,6 +37,13 @@ cmd_build() {
 	[ -z "${1:-}" ] && { usage; exit 1; }
 	for target in "$@"; do
 	case "$target" in
+	sxwm)
+		hdr "Building sxwm..."
+		need_root
+		cd "$SXWM_SRC" && bmake clean && bmake \
+			&& install -m755 sxwm /usr/local/bin/sxwm \
+			&& ok "sxwm installed"
+		;;
 	dwm)
 		hdr "Building dwm..."
 		need_root
@@ -268,6 +275,16 @@ cmd_build() {
 			&& cp /tmp/chilock /usr/local/bin/chilock \
 			&& ok "chilock installed"
 		;;
+	chibar)
+		hdr "Building chibar..."
+		need_root
+		pkill_bin chibar
+		cc -O2 -Wall $(pkgconf --cflags xft) \
+			-o /tmp/chibar "$DWM_CFG/otherthings/chibar.c" \
+			-lX11 -lXft \
+			&& cp /tmp/chibar /usr/local/bin/chibar \
+			&& ok "chibar installed"
+		;;
 	chisniff)
 		hdr "Building chisniff..."
 		need_root
@@ -291,7 +308,7 @@ cmd_build() {
 			&& ok "chitools installed"
 		;;
 	all)
-		cmd_build dwm
+		cmd_build sxwm
 		cmd_build st
 		cmd_build dmenu
 		cmd_build chifetch
@@ -323,11 +340,12 @@ cmd_build() {
 		cmd_build chiidle
 		cmd_build chiresume
 		cmd_build chilock
+		cmd_build chibar
 		cmd_build chisniff
 		cmd_build chitools
 		;;
 	*)
-		die "unknown target: $target — valid: dwm|st|dmenu|chifetch|dwmstatus|chikeys|chicalc|chiadvcalc|chivid|chiview|chitop|chinotes|chifm|chilauncher|chiclip|chiwallpaper|chitodo|chiman|chitimer|chied|chimusic|chidisp|chikblayout|chilayout|chioverview|chiqemu|chiharden|chilock|chisniff|chitools|all"
+		die "unknown target: $target — valid: sxwm|dwm|st|dmenu|chifetch|dwmstatus|chikeys|chicalc|chiadvcalc|chivid|chiview|chitop|chinotes|chifm|chilauncher|chiclip|chiwallpaper|chitodo|chiman|chitimer|chied|chimusic|chidisp|chikblayout|chilayout|chioverview|chiqemu|chiharden|chilock|chisniff|chitools|all"
 		;;
 	esac
 	done
@@ -360,18 +378,8 @@ cmd_status() {
 	done
 }
 
-cmd_patch_musl() {
-	bin="${1:-}"
-	[ -z "$bin" ] && die "usage: chitools patch-musl <binary>"
-	[ -f "$bin" ] || die "file not found: $bin"
-	command -v patchelf >/dev/null 2>&1 || die "patchelf not installed — doas apk add patchelf"
-
-	hdr "Patching $bin for musl..."
-	old=$(patchelf --print-interpreter "$bin" 2>/dev/null || printf "none")
-	printf "  old: %s\n" "$old"
-	patchelf --set-interpreter "$MUSL_INTERP" "$bin" \
-		&& printf "  new: %s\n" "$MUSL_INTERP" \
-		&& ok "patched $bin"
+cmd_patch_interp() {
+	die "patch-interp: not applicable on Artix (glibc) — only needed for musl systems"
 }
 
 cmd_font() {
@@ -520,7 +528,7 @@ cmd_audio() {
 cmd_update() {
 	hdr "Updating system packages..."
 	need_root
-	apk upgrade || die "apk upgrade failed"
+	pacman -Syu --noconfirm || die "pacman upgrade failed"
 	ok "system updated"
 
 	hdr "Applying hardware fixes..."
@@ -557,19 +565,18 @@ cmd_pkg() {
 	action="${1:-}"; shift
 	[ -z "$action" ] && die "usage: chitools pkg <search|install|remove|upgrade> [name]"
 	case "$action" in
-	search)  apk search "$@" ;;
-	install) need_root; apk add "$@" && ok "installed: $*" ;;
-	remove)  need_root; apk del "$@" && ok "removed: $*" ;;
-	upgrade) need_root; apk upgrade && ok "system upgraded" ;;
+	search)  pacman -Ss "$@" ;;
+	install) need_root; pacman -S --noconfirm "$@" && ok "installed: $*" ;;
+	remove)  need_root; pacman -Rns --noconfirm "$@" && ok "removed: $*" ;;
+	upgrade) need_root; pacman -Syu --noconfirm && ok "system upgraded" ;;
 	*)       die "pkg: unknown action (search|install|remove|upgrade)" ;;
 	esac
 }
 
 usage() {
-	printf "${PNK}chitools${RST} — Chimera Linux management CLI\n\n"
+	printf "${PNK}chitools${RST} — Artix Linux (dinit) management CLI\n\n"
 	printf "  ${CYN}status${RST}                     system info (uptime, mem, bat, wifi)\n"
-	printf "  ${CYN}build${RST} <target>             build+install (dwm|st|dmenu|chifetch|dwmstatus|all)\n"
-	printf "  ${CYN}patch-musl${RST} <bin>           patch ELF interpreter to musl\n"
+	printf "  ${CYN}build${RST} <target>             build+install (sxwm|dwm|st|dmenu|chifetch|dwmstatus|all)\n"
 	printf "  ${CYN}font${RST} list                  list installed fonts\n"
 	printf "  ${CYN}font${RST} cache                 rebuild fc-cache\n"
 	printf "  ${CYN}font${RST} install <url.zip>     download and install a font zip\n"
@@ -584,11 +591,11 @@ usage() {
 	printf "  ${CYN}audio${RST} list                  list audio sinks\n"
 	printf "  ${CYN}audio${RST} set <id>              set default sink\n"
 	printf "  ${CYN}audio${RST} status                show current default sink\n"
-	printf "  ${CYN}pkg${RST} <search|install|remove|upgrade> [name]   apk wrapper\n"
+	printf "  ${CYN}pkg${RST} <search|install|remove|upgrade> [name]   pacman wrapper\n"
 	printf "  ${CYN}wallpaper${RST} set <file>          set wallpaper (saves to ~/.wallpaper)\n"
 	printf "  ${CYN}wallpaper${RST} apply               re-apply saved wallpaper\n"
 	printf "  ${CYN}wallpaper${RST} clear               remove wallpaper (solid bg)\n"
-	printf "  ${CYN}update${RST}                     apk upgrade + re-apply hardware fixes\n"
+	printf "  ${CYN}update${RST}                     pacman -Syu + re-apply hardware fixes\n"
 	printf "  ${CYN}fix${RST} audio                  restart pipewire + fix T460 HDA driver\n"
 }
 
@@ -598,7 +605,6 @@ cmd="${1:-}"
 case "$cmd" in
 status)      cmd_status ;;
 build)       cmd_build "$@" ;;
-patch-musl)  cmd_patch_musl "$@" ;;
 font)        cmd_font "$@" ;;
 wifi)        cmd_wifi "$@" ;;
 eth)         cmd_eth "$@" ;;

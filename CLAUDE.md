@@ -1,29 +1,26 @@
 # dwm customization project
 
 ## Goal
-Configure dwm for Mark's Chimera Linux setup. Build target: ThiccPad (T460, i5-6200U).
-Uses Chimera Linux (musl + LLVM, no GNU, apk package manager, dinit init system).
+Configure dwm for Mark's Artix Linux (dinit) setup. Build target: ThiccPad (T460, i5-6200U).
+Uses Artix Linux (glibc, pacman package manager, dinit init system).
 
 ## Machine info
 - ThiccPad: 192.168.0.92, user: mark, T460 i5-6200U 16GB
-- Main machine: femboy (mark@localhost)
-- Build tool: bmake (BSD make), compiler: clang/cc
+- Build tool: bmake (available via pacman), compiler: clang/cc
 - Shell: oksh (/usr/local/bin/oksh) for mark only — never blanket sed /etc/passwd!
-- Init: dinit (use `dinitctl` not systemctl)
+- Init: dinit (use `dinitctl` not systemctl); enable services via symlinks in /etc/dinit.d/boot.d/
 - mark's groups: wheel, video, network, audio, kvm, plugdev
-- doas: `permit nopass :wheel` in /etc/doas.conf
+- doas: `permit nopass :wheel` in /etc/doas.conf (package: opendoas)
 
 ## Follow this workflow
-edit config.h / patch dwm.c → bmake → test → scp to mark@192.168.0.92
+edit config.h / patch dwm.c → bmake → test
 
 ## dwm.c patch workflow
-- Keep a local copy at ~/dwm.c: `scp mark@192.168.0.92:dwm-src/dwm.c ~/dwm.c`
-- Edit on femboy, scp back: `scp ~/dwm.c mark@192.168.0.92:dwm-src/dwm.c`
 - fibonacci.c must be `#include`d at the VERY END of dwm.c (after main()), with forward declarations added before config.h
 - push patch hunk #1 often fails — add prevtiled/pushdown/pushup declarations manually
 
 ## Setup scripts
-- `otherthings/setup.sh` — full fresh install setup (run as root after Chimera reinstall)
+- `otherthings/setup.sh` — full fresh install setup (run as root after Artix install)
 - `otherthings/setup-oksh.sh` — set oksh as mark's shell (run after setup.sh)
 
 ## Current state
@@ -43,7 +40,7 @@ edit config.h / patch dwm.c → bmake → test → scp to mark@192.168.0.92
 - chiclip: clipboard history daemon + dmenu picker (otherthings/chiclip) — daemon runs from xinitrc; Super+C to pick
 - chiwallpaper: custom wallpaper setter (otherthings/chiwallpaper.c) — bg-fill mode; -g/--gif for animated GIF; needs imlib2-devel libx11-devel
 - chiview: minimal image viewer (otherthings/chiview.c) — imlib2+Xlib; zoom (+/-/scroll), pan (drag/hjkl), fit(0), actual(1); built with cc -lX11 -lImlib2
-- chivid: video player (otherthings/chivid) — ffplay wrapper; needs `apk add ffmpeg-ffplay`
+- chivid: video player (otherthings/chivid) — ffplay wrapper; needs `pacman -S ffmpeg`
 - chitop: process viewer (otherthings/chitop.c) — /proc-based CPU%+mem, two-snapshot; sort c/m; built with cc -lncurses
 - chinotes: quick notes (otherthings/chinotes) — dmenu picker, notes in ~/.local/share/chinotes/notes; Super+N/Super+Shift+N
 - dwmstatus: includes CPU temp from /sys/class/thermal; flashes `!!! Xc° !!!` when ≥80°C; shows todo/timer/kblayout
@@ -63,7 +60,7 @@ edit config.h / patch dwm.c → bmake → test → scp to mark@192.168.0.92
 - chikblayout: reads active XKB group (otherthings/chikblayout.c) — used by dwmstatus to show en/ua; cc -lX11
 - dwm restart patch: `restart()` sets restarting=1, main calls execvp after cleanup; Super+Shift+F4 restarts in-place
 - vim: ~/.vimrc with chi colorscheme (~/.vim/colors/chi.vim); plugins at ~/.vim/pack/plugins/start/ (fzf.vim, vim-fugitive, vim-commentary, vim-gutentags, ale)
-- Audio: pipewire + wpctl (no alsa-utils on Chimera)
+- Audio: pipewire + wpctl (no alsa-utils; use wpctl for volume control)
 - Lid close → suspend via elogind: `HandleLidSwitch=suspend` in /etc/elogind/logind.conf
 
 ## Colorscheme (pink gradient)
@@ -105,20 +102,20 @@ edit config.h / patch dwm.c → bmake → test → scp to mark@192.168.0.92
 - Super+P: toggle bar
 - XF86 media keys: volume up/down/mute, brightness up/down
 
-## Packages (Chimera names)
-- xserver-xorg, xserver-xorg-input-libinput, libxinerama-devel
-- libxft-devel, freetype-devel, pkgconf, ncurses-devel
-- clang, bmake, git, curl, unzip, bash, firefox, xinit, openssh, xclip, gnome-screenshot
-- pipewire, pipewire-alsa (audio — no alsa-utils on Chimera, use wpctl)
-- imlib2-devel, libx11-devel, chimerautils-devel, readline-devel (for chiwallpaper/chifm builds)
-- ffmpeg-ffplay (for chivid — package name is `ffmpeg-ffplay`, not `ffplay`)
-- nnn/ranger/vifm not in Chimera repos; use chifm instead
-- most software not in Chimera repos needs gmake — don't add gmake as a dep, write custom C tools instead
+## Packages (Artix/pacman names)
+- xorg-server, xf86-input-libinput, libxinerama
+- libxft, freetype2, pkgconf, ncurses
+- clang, bmake, base-devel, git, curl, unzip, firefox, xorg-xinit, openssh, xclip, gnome-screenshot
+- pipewire, pipewire-alsa, pipewire-pulse, wireplumber (audio — use wpctl; wireplumber is session manager)
+- imlib2, libx11, readline (for chiwallpaper/chifm builds)
+- ffmpeg (includes ffplay — package is `ffmpeg`, not `ffmpeg-ffplay`)
+- opendoas (package name for doas on Artix)
+- elogind-dinit, networkmanager-dinit, openssh-dinit (dinit service wrappers)
+- iw, dbus, python, iw
 
 ## Gotchas
 - Never `sed -i` all of /etc/passwd — use `chsh -s shell username` per user
-- Chimera's sed is BSD sed: use `-i ''` not just `-i`
-- oksh builds with bmake (not gmake) — `./configure && bmake && bmake install`
+- oksh builds with GNU make on Artix — `./configure && make && make install`
 - `source` doesn't exist in oksh — use `.`
 - dmenu SchemeNormHighlight/SchemeSelHighlight need fuzzyhighlight patch — don't add without patching
 - st config.h must match the exact version's structure — always base on config.def.h after patching
@@ -128,20 +125,16 @@ edit config.h / patch dwm.c → bmake → test → scp to mark@192.168.0.92
 - chitools scripts must NOT call doas internally — run the whole script as `doas chitools build ...`
 - fibonacci.c include at end of dwm.c, forward declarations before config.h; systray patch has too many conflicts — skip it
 - No dunst — user does not want a notification daemon
-- Screenshot tool is gnome-screenshot (scrot not available on Chimera); region: gnome-screenshot -a
+- Screenshot tool is gnome-screenshot; region: gnome-screenshot -a
 - doas has restricted PATH — `doas chitools` fails; use `doas /usr/local/bin/chitools` until fixed
 - chifm opens files with $EDITOR (vim); EDITOR=vim set in ~/.profile
 - imlib2 animation API: use `imlib_load_image_frame(file, n)` per frame; struct is `Imlib_Frame_Info`; `frame_delay` is ms
-- `__useconds_t` doesn't exist on musl — cast usleep arg to `unsigned int`
 - `scroll` conflicts with ncurses built-in `scroll()` — use `vscroll` as variable name in ncurses programs
 - `%f` in mvprintw/mvhline format strings is a float specifier — escape as `%%f` for literal `%f`
-- popen/pclose require `#define _POSIX_C_SOURCE 200809L` on musl
 - oksh history: add `HISTFILE=~/.oksh_history`, `HISTSIZE=1000`, `set -o emacs` to `~/.okshrc`
 - Claude Code runs directly on ThiccPad — never SSH to it, run Bash commands locally
 - Always use `doas /usr/local/bin/chitools build <target>` to build/install — never run bmake or cp manually
-- Mark uses Claude Code exclusively on ThiccPad from now on — all commands run locally, no femboy/SCP workflow needed
 - `popen("r+")` doesn't work — use fork+pipe+exec for bidirectional dmenu communication in C tools
-- libpcap on musl needs `#define _BSD_SOURCE` before includes — otherwise `u_char`/`u_int`/`u_short` are undefined
 - doas strips XAUTHORITY — X11 tools run via doas fail with "Authorization required"; fix: `SHCMD("doas env XAUTHORITY=\"$XAUTHORITY\" <tool>")` in config.h, or `doas env XAUTHORITY="$XAUTHORITY" <tool>` in scripts
 - `grep -v` exits 1 when no lines match — don't chain with `&&` when empty output is valid; use `;` instead
 - Binding Shift/Alt as key itself in dwm is unreliable — use `setxkbmap -option grp:alt_shift_toggle` for layout switching
@@ -149,3 +142,5 @@ edit config.h / patch dwm.c → bmake → test → scp to mark@192.168.0.92
 - `setxkbmap -query` shows configured layouts not active group — use chikblayout (XKB Xlib) for active layout in dwmstatus
 - dwm restart via execvp preserves all X clients — dwmstatus, chiclip, windows all persist across Super+Shift+F4
 - Battery time remaining: dwmstatus reads energy_now/power_now or charge_now/current_now from sysfs; toggled via /tmp/chi_batttime flag file; Super+Shift+B
+- Artix dinit services: enable by symlinking to /etc/dinit.d/boot.d/ or `dinitctl enable <service>`
+- doas package on Artix is `opendoas`; config at /etc/doas.conf must be chmod 0400
