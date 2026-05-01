@@ -308,7 +308,7 @@ cmd_build() {
 			&& ok "chitools installed"
 		;;
 	all)
-		cmd_build sxwm
+		cmd_build dwm
 		cmd_build st
 		cmd_build dmenu
 		cmd_build chifetch
