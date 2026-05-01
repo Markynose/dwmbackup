@@ -174,9 +174,12 @@ update_bar() {
 	base="$(wifi)  |  $(volume)"
 	[ -n "$b" ]  && base="$base  |  $b"
 	[ -n "$t" ]  && base="$base  |  $t"
-	bt=$(batttime)
-	base="$base  |  $(battery)"
-	[ -n "$bt" ] && base="$base ($bt)"
+	bat=$(battery)
+	if [ -n "$bat" ] && [ "$bat" != "no bat" ]; then
+		bt=$(batttime)
+		base="$base  |  $bat"
+		[ -n "$bt" ] && base="$base ($bt)"
+	fi
 	base="$base  |  $kb  |  $(date '+%H:%M')"
 	[ -n "$td" ] && base="$base  |  todo: $td"
 	[ -n "$tm" ] && base="$base  |  $tm"
