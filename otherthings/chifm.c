@@ -391,31 +391,56 @@ static void extract_sel(void) {
 	char rel[260];
 	snprintf(rel, sizeof(rel), "./%s", e->name);
 
-	char cmd[512];
+	/* destination folder = filename minus extension, leading '-' stripped */
+	char base[256] = {0};
+	strncpy(base, e->name, sizeof(base) - 1);
+	char *p;
+	if      ((p = strstr(base, ".tar.gz")))  *p = 0;
+	else if ((p = strstr(base, ".tar.bz2"))) *p = 0;
+	else if ((p = strstr(base, ".tar.xz")))  *p = 0;
+	else if ((p = strstr(base, ".tar.zst"))) *p = 0;
+	else if ((p = strstr(base, ".tgz")))     *p = 0;
+	else if ((p = strstr(base, ".tbz2")))    *p = 0;
+	else if ((p = strstr(base, ".txz")))     *p = 0;
+	else if ((p = strstr(base, ".tar")))     *p = 0;
+	else if ((p = strstr(base, ".zip")))     *p = 0;
+	else if ((p = strstr(base, ".ZIP")))     *p = 0;
+	else if ((p = strrchr(base, '.')))       *p = 0;
+	char *dname = base;
+	while (*dname == '-') dname++;
+	if (!*dname) dname = "extracted";
+
 	const char *n = e->name;
+	int single = 0; /* single-file decompressors don't need a dest dir */
+	char cmd[1024];
 	if (strstr(n, ".tar.gz") || strstr(n, ".tgz"))
-		snprintf(cmd, sizeof(cmd), "tar xzf '%s' -C .", rel);
+		snprintf(cmd, sizeof(cmd), "tar xzf '%s' -C './%s'", rel, dname);
 	else if (strstr(n, ".tar.bz2") || strstr(n, ".tbz2"))
-		snprintf(cmd, sizeof(cmd), "tar xjf '%s' -C .", rel);
+		snprintf(cmd, sizeof(cmd), "tar xjf '%s' -C './%s'", rel, dname);
 	else if (strstr(n, ".tar.xz") || strstr(n, ".txz"))
-		snprintf(cmd, sizeof(cmd), "tar xJf '%s' -C .", rel);
+		snprintf(cmd, sizeof(cmd), "tar xJf '%s' -C './%s'", rel, dname);
 	else if (strstr(n, ".tar.zst"))
-		snprintf(cmd, sizeof(cmd), "tar --zstd -xf '%s' -C .", rel);
+		snprintf(cmd, sizeof(cmd), "tar --zstd -xf '%s' -C './%s'", rel, dname);
 	else if (strstr(n, ".tar"))
-		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C .", rel);
+		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C './%s'", rel, dname);
 	else if (strstr(n, ".zip") || strstr(n, ".ZIP"))
-		snprintf(cmd, sizeof(cmd), "unzip -d . '%s'", rel);
+		snprintf(cmd, sizeof(cmd), "unzip -d './%s' '%s'", dname, rel);
 	else if (strstr(n, ".gz"))
-		snprintf(cmd, sizeof(cmd), "gunzip -k '%s'", rel);
+		{ snprintf(cmd, sizeof(cmd), "gunzip -k '%s'", rel); single = 1; }
 	else if (strstr(n, ".bz2"))
-		snprintf(cmd, sizeof(cmd), "bunzip2 -k '%s'", rel);
+		{ snprintf(cmd, sizeof(cmd), "bunzip2 -k '%s'", rel); single = 1; }
 	else if (strstr(n, ".xz"))
-		snprintf(cmd, sizeof(cmd), "xz -dk '%s'", rel);
+		{ snprintf(cmd, sizeof(cmd), "xz -dk '%s'", rel); single = 1; }
 	else
-		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C .", rel);
+		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C './%s'", rel, dname);
 
 	endwin();
 	chdir(cwd);
+	if (!single) {
+		char destpath[4096];
+		snprintf(destpath, sizeof(destpath), "%s/%s", cwd, dname);
+		mkdir(destpath, 0755);
+	}
 	system(cmd);
 	printf("\n[press enter]");
 	fflush(stdout);
