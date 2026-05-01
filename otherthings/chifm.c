@@ -386,36 +386,36 @@ static void archive_sel(void) {
 static void extract_sel(void) {
 	if (!nents) return;
 	Entry *e = &ents[sel];
-	char full[4096];
-	snprintf(full, sizeof(full), "%s/%s", cwd, e->name);
 
-	/* detect format by extension */
-	char cmd[4096 + 128];
+	/* ./ prefix so filenames starting with '-' aren't parsed as flags */
+	char rel[260];
+	snprintf(rel, sizeof(rel), "./%s", e->name);
+
+	char cmd[512];
 	const char *n = e->name;
 	if (strstr(n, ".tar.gz") || strstr(n, ".tgz"))
-		snprintf(cmd, sizeof(cmd), "tar xzf '%s' -C '%s'", full, cwd);
+		snprintf(cmd, sizeof(cmd), "tar xzf '%s' -C .", rel);
 	else if (strstr(n, ".tar.bz2") || strstr(n, ".tbz2"))
-		snprintf(cmd, sizeof(cmd), "tar xjf '%s' -C '%s'", full, cwd);
+		snprintf(cmd, sizeof(cmd), "tar xjf '%s' -C .", rel);
 	else if (strstr(n, ".tar.xz") || strstr(n, ".txz"))
-		snprintf(cmd, sizeof(cmd), "tar xJf '%s' -C '%s'", full, cwd);
+		snprintf(cmd, sizeof(cmd), "tar xJf '%s' -C .", rel);
 	else if (strstr(n, ".tar.zst"))
-		snprintf(cmd, sizeof(cmd), "tar --zstd -xf '%s' -C '%s'", full, cwd);
+		snprintf(cmd, sizeof(cmd), "tar --zstd -xf '%s' -C .", rel);
 	else if (strstr(n, ".tar"))
-		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C '%s'", full, cwd);
+		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C .", rel);
 	else if (strstr(n, ".zip") || strstr(n, ".ZIP"))
-		snprintf(cmd, sizeof(cmd), "unzip -d '%s' '%s'", cwd, full);
+		snprintf(cmd, sizeof(cmd), "unzip -d . '%s'", rel);
 	else if (strstr(n, ".gz"))
-		snprintf(cmd, sizeof(cmd), "gunzip -k '%s'", full);
+		snprintf(cmd, sizeof(cmd), "gunzip -k '%s'", rel);
 	else if (strstr(n, ".bz2"))
-		snprintf(cmd, sizeof(cmd), "bunzip2 -k '%s'", full);
+		snprintf(cmd, sizeof(cmd), "bunzip2 -k '%s'", rel);
 	else if (strstr(n, ".xz"))
-		snprintf(cmd, sizeof(cmd), "xz -dk '%s'", full);
-	else {
-		/* unknown — try tar anyway */
-		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C '%s'", full, cwd);
-	}
+		snprintf(cmd, sizeof(cmd), "xz -dk '%s'", rel);
+	else
+		snprintf(cmd, sizeof(cmd), "tar xf '%s' -C .", rel);
 
 	endwin();
+	chdir(cwd);
 	system(cmd);
 	printf("\n[press enter]");
 	fflush(stdout);
