@@ -1,46 +1,15 @@
 #!/bin/sh
-# setup.sh — fresh Artix Linux (dinit) install on ThiccPad T460
-# run as root after Artix install
+# setup.sh — fresh Slackware install tuning for ThinkPad T460
+# Pulls your monorepo and hands execution off to chitools
 
 set -e
 
-echo "==> Adding Arch Linux repos..."
-if ! grep -q '\[extra\]' /etc/pacman.conf; then
-	curl -o /etc/pacman.d/mirrorlist-arch \
-		'https://archlinux.org/mirrorlist/?country=all&protocol=https&use_mirror_status=on'
-	sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist-arch
-	cat >> /etc/pacman.conf << 'EOF'
-
-[extra]
-Include = /etc/pacman.d/mirrorlist-arch
-EOF
-	echo "Arch extra repo added."
-else
-	echo "Arch extra repo already present, skipping."
-fi
-
-echo "==> Syncing and installing dependencies..."
-pacman -Syu --noconfirm
-pacman -S --noconfirm --needed \
-	base-devel git curl unzip pkgconf \
-	clang bmake \
-	ncurses libxft libxinerama libx11 \
-	freetype2 imlib2 readline \
-	libpcap libxscrnsaver \
-	xorg-xinit xorg-server xf86-input-libinput xclip \
-	pipewire pipewire-alsa pipewire-pulse wireplumber \
-	firefox gnome-screenshot \
-	openssh python iw dbus \
-	opendoas elogind networkmanager \
-	elogind-dinit networkmanager-dinit openssh-dinit
-
-echo "==> Enabling dinit services..."
-ln -sf /etc/dinit.d/dbus        /etc/dinit.d/boot.d/dbus
-ln -sf /etc/dinit.d/elogind     /etc/dinit.d/boot.d/elogind
-ln -sf /etc/dinit.d/NetworkManager /etc/dinit.d/boot.d/NetworkManager
+echo "==> Configuring native Slackware init services..."
+chmod +x /etc/rc.d/rc.messagebus      # D-Bus daemon
+chmod +x /etc/rc.d/rc.networkmanager  # NetworkManager daemon
+chmod +x /etc/rc.d/rc.sshd            # OpenSSH daemon
 
 echo "==> Applying T460 hardware fixes..."
-# Skylake: SOF driver takes priority but fails; force legacy HDA
 echo "options snd_intel_dspcfg dsp_driver=1" > /etc/modprobe.d/snd-hda.conf
 
 echo "==> Fixing backlight permissions..."
@@ -48,18 +17,28 @@ cat > /etc/udev/rules.d/90-backlight.rules << 'EOF'
 ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys/class/backlight/%k/brightness"
 ACTION=="add", SUBSYSTEM=="backlight", RUN+="/bin/chmod g+w /sys/class/backlight/%k/brightness"
 EOF
-usermod -aG video,wheel,network,audio,kvm,plugdev mark
+
+# Ensure user 'mark' is added to essential subsystem groups
+if ! id "mark" >/dev/null 2>&1; then
+	useradd -m -G wheel,audio,video,power,plugdev -s /bin/bash mark
+	echo "Created user mark."
+else
+	usermod -aG wheel,audio,video,power,plugdev mark
+fi
 
 echo "==> Setting up doas..."
+mkdir -p /etc
 echo "permit nopass :wheel" > /etc/doas.conf
 chmod 0400 /etc/doas.conf
 
-echo "==> Installing oksh..."
+echo "==> Installing oksh from source..."
 rm -rf /tmp/oksh
 git clone https://github.com/ibara/oksh.git /tmp/oksh
 cd /tmp/oksh
 ./configure && make && make install
-echo /usr/local/bin/oksh >> /etc/shells
+if ! grep -q '/usr/local/bin/oksh' /etc/shells; then
+	echo /usr/local/bin/oksh >> /etc/shells
+fi
 chsh -s /usr/local/bin/oksh mark
 cd -
 
@@ -71,64 +50,74 @@ unzip -o JetBrainsMono.zip
 fc-cache -fv
 cd -
 
-echo "==> Cloning dwm..."
-rm -rf /home/mark/dwm-src
-git clone https://git.suckless.org/dwm /home/mark/dwm-src
-cd /home/mark/dwm-src
-cp /home/mark/dwm/config.h .
-bmake && bmake install
+# Helper to inject clean 64-bit multi-arch paths before chitools builds anything
+fix_suckless_config() {
+	if [ -f config.mk ]; then
+		sed -i 's|/usr/X11R6/include|/usr/include/X11|g' config.mk
+		sed -i 's|/usr/X11R6/lib|/usr/lib64/X11|g' config.mk
+		sed -i 's|/usr/local/include|/usr/include|g' config.mk
+		sed -i 's|/usr/local/lib|/usr/lib64|g' config.mk
+	fi
+}
+
+echo "==> Syncing your custom repository..."
+rm -rf /home/mark/dwm
+git clone https://github.com/Markynose/dwmbackup /home/mark/dwm
+
+echo "==> Fixing paths inside environment makefiles..."
+# Recursively look for any config.mk files in your repo and fix X11 paths for Slackware 64-bit
+find /home/mark/dwm -name "config.mk" | while read -r cfile; do
+	cd "$(dirname "$cfile")"
+	fix_suckless_config
+	cd - > /dev/null
+done
+
+echo "==> Compiling base user interface..."
+cd /home/mark/dwm
+make && make install
 cd -
 
-echo "==> Cloning st..."
-rm -rf /home/mark/st
-git clone https://git.suckless.org/st /home/mark/st
-cd /home/mark/st
-curl -O https://st.suckless.org/patches/scrollback/st-scrollback-0.9.2.diff
-curl -O https://st.suckless.org/patches/scrollback/st-scrollback-mouse-0.9.2.diff
-patch -p1 < st-scrollback-0.9.2.diff
-patch -p1 < st-scrollback-mouse-0.9.2.diff
-cp /home/mark/dwm/otherthings/st/config.h .
-bmake && bmake install
+cd /home/mark/dwm/otherthings/st
+make && make install
 cd -
 
-echo "==> Cloning dmenu..."
-rm -rf /home/mark/dmenu
-git clone https://git.suckless.org/dmenu /home/mark/dmenu
-cd /home/mark/dmenu
-cp /home/mark/dwm/otherthings/dmenu/config.h .
-bmake && bmake install
+cd /home/mark/dwm/otherthings/dmenu
+make && make install
 cd -
 
-echo "==> Installing chitools..."
-cp /home/mark/dwm/otherthings/chitools /usr/local/bin/chitools
-chmod +x /usr/local/bin/chitools
+echo "==> Handing orchestrator installation off to chitools..."
+if [ -f /home/mark/dwm/otherthings/chitools ]; then
+	# Copy and provision your custom orchestration executable
+	cp /home/mark/dwm/otherthings/chitools /usr/local/bin/chitools
+	chmod +x /usr/local/bin/chitools
+	
+	echo "==> Driving internal framework compilation via chitools..."
+	/usr/local/bin/chitools build all
+fi
 
-echo "==> Building all chi tools..."
-/usr/local/bin/chitools build all
-
-echo "==> Setting up xinitrc..."
+echo "==> Generating clean .xinitrc framework..."
 cat > /home/mark/.xinitrc << 'EOF'
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-pipewire &
-wireplumber &
-pipewire-pulse &
+
 chilayout &
 dwmstatus &
 chiclip daemon &
 chiidle &
 chiresume &
+
 if [ -f ~/.wallpaper ]; then
   case "$(file -b ~/.wallpaper)" in
   GIF*) chiwallpaper -g ~/.wallpaper &;;
   *)    chiwallpaper ~/.wallpaper &;;
   esac
 fi
+
 eval "$(ssh-agent -s)"
 exec dwm
 EOF
 
-echo "==> Setting ownership..."
+echo "==> Standardizing local directory privileges..."
 chown -R mark:mark /home/mark
 chmod 755 /home/mark
 
-echo "==> Done! Log in as mark and run: startx"
+echo "==> Everything is built and synced! Drop out of root, type 'startx', and see how it flies."
