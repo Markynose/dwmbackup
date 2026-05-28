@@ -1,10 +1,10 @@
 #!/bin/sh
-# chitools — Artix Linux (dinit) / ThiccPad local management CLI
+# chitools — Gentoo (OpenRC) / femboy management CLI
 
-DWM_SRC="/home/mark/dwm-src"
+DWM_SRC="/home/mark/dwm"
 ST_SRC="/home/mark/st"
 DMENU_SRC="/home/mark/dmenu"
-SXWM_SRC="/home/mark/sxwm"
+
 DWM_CFG="/home/mark/dwm"
 
 RED='\033[1;31m'
@@ -38,9 +38,9 @@ cmd_build() {
 	for target in "$@"; do
 	case "$target" in
 	sxwm)
-		hdr "Building sxwm..."
+		hdr "sxwm: not used on this setup, skipping"
 		need_root
-		cd "$SXWM_SRC" && bmake clean && bmake \
+		cd "$SXWM_SRC" && make clean && make \
 			&& install -m755 sxwm /usr/local/bin/sxwm \
 			&& ok "sxwm installed"
 		;;
@@ -48,19 +48,19 @@ cmd_build() {
 		hdr "Building dwm..."
 		need_root
 		cp "$DWM_CFG/config.h" "$DWM_SRC/config.h" || die "config.h not found"
-		cd "$DWM_SRC" && bmake && bmake install && ok "dwm installed"
+		cd "$DWM_SRC" && make && make install && ok "dwm installed"
 		;;
 	st)
 		hdr "Building st..."
 		need_root
 		cp "$DWM_CFG/otherthings/st/config.h" "$ST_SRC/config.h" || die "st config.h not found"
-		cd "$ST_SRC" && bmake && bmake install && ok "st installed"
+		cd "$ST_SRC" && make && make install && ok "st installed"
 		;;
 	dmenu)
 		hdr "Building dmenu..."
 		need_root
 		cp "$DWM_CFG/otherthings/dmenu/config.h" "$DMENU_SRC/config.h" || die "dmenu config.h not found"
-		cd "$DMENU_SRC" && bmake && bmake install && ok "dmenu installed"
+		cd "$DMENU_SRC" && make && make install && ok "dmenu installed"
 		;;
 	chifetch)
 		hdr "Building chifetch..."
@@ -230,7 +230,7 @@ cmd_build() {
 		need_root
 		pkill_bin chiqemu
 		cd "$DWM_CFG/otherthings/chiqemu" \
-			&& su mark -c '/home/mark/.cargo/bin/cargo build --release' \
+			&& su mark -c 'export PATH="$HOME/.cargo/bin:$PATH"; cd /otherthings/chiqemu && cargo build --release' \
 			&& cp target/release/chiqemu /usr/local/bin/chiqemu \
 			&& ok "chiqemu installed"
 		;;
@@ -352,28 +352,16 @@ cmd_build() {
 }
 
 cmd_status() {
-	hdr "ThiccPad status"
+	hdr "femboy status"
 	printf "  uptime:  "; awk '{printf "%d min\n", $1/60}' /proc/uptime
 	printf "  load:    "; awk '{print $1, $2, $3}' /proc/loadavg
 	printf "  mem:     "; awk '/MemAvailable/{a=$2} /MemTotal/{t=$2} END{printf "%d MB free / %d MB total\n", a/1024, t/1024}' /proc/meminfo
 	printf "  disk:    "; df -h / | awk 'NR==2{print $4" free of "$2}'
-	printf "  bat:     "
-	total=0; count=0; charging=""
-	for b in BAT0 BAT1; do
-		[ -d "/sys/class/power_supply/$b" ] || continue
-		cap=$(cat /sys/class/power_supply/$b/capacity 2>/dev/null)
-		status=$(cat /sys/class/power_supply/$b/status 2>/dev/null)
-		[ -z "$cap" ] && continue
-		total=$((total + cap)); count=$((count + 1))
-		[ "$status" = "Charging" ] && charging="+"
-	done
-	[ "$count" -gt 0 ] && printf "%d%%%s\n" $((total / count)) "$charging" || printf "n/a\n"
-
-	printf "  wifi:    "
-	for iface in wlp3s0 wlan0 wlp2s0 wlp4s0; do
+	printf "  net:     "
+	for iface in enp4s0 enp3s0 eth0 eno1; do
 		[ -d "/sys/class/net/$iface" ] || continue
-		ssid=$(iw dev "$iface" link 2>/dev/null | awk '/SSID:/{print $2}')
-		[ -n "$ssid" ] && printf "%s (%s)\n" "$ssid" "$iface" || printf "disconnected (%s)\n" "$iface"
+		state=$(cat /sys/class/net/$iface/operstate 2>/dev/null)
+		printf "%s: %s\n" "$iface" "$state"
 		break
 	done
 }
@@ -452,13 +440,11 @@ cmd_eth() {
 		nmcli device status | grep ethernet
 		;;
 	connect)
-		nmcli device connect enp0s25 2>/dev/null \
-			|| nmcli device connect eth0 2>/dev/null \
+		nmcli device connect 2>/dev/null \
 			&& ok "ethernet connected"
 		;;
 	disconnect)
-		nmcli device disconnect enp0s25 2>/dev/null \
-			|| nmcli device disconnect eth0 2>/dev/null \
+		nmcli device disconnect 2>/dev/null \
 			&& ok "ethernet disconnected"
 		;;
 	*)   die "eth: unknown action (status|connect|disconnect)" ;;
@@ -469,9 +455,9 @@ cmd_service() {
 	action="${1:-}"; name="${2:-}"
 	[ -z "$action" ] || [ -z "$name" ] && die "usage: chitools service <start|stop|status> <name>"
 	case "$action" in
-	start)  need_root; dinitctl start "$name"  && ok "started $name" ;;
-	stop)   need_root; dinitctl stop "$name"   && ok "stopped $name" ;;
-	status) dinitctl status "$name" ;;
+	start)  need_root; rc-service "$name"  && ok "started $name" ;;
+	stop)   need_root; rc-service "$name" stop   && ok "stopped $name" ;;
+	status) rc-service "$name" status ;;
 	*)      die "service: unknown action (start|stop|status)" ;;
 	esac
 }
@@ -528,53 +514,31 @@ cmd_audio() {
 cmd_update() {
 	hdr "Updating system packages..."
 	need_root
-	pacman -Syu --noconfirm || die "pacman upgrade failed"
+	emerge -uDN @world || die "pacman upgrade failed"
 	ok "system updated"
 
 	hdr "Applying hardware fixes..."
-	# T460 Skylake: SOF driver takes priority but fails; force legacy HDA
+	# femboy i5-12400F: SOF driver takes priority but fails; force legacy HDA
 	echo "options snd_intel_dspcfg dsp_driver=1" > /etc/modprobe.d/snd-hda.conf
 	ok "audio: T460 HDA driver pinned"
 }
 
-cmd_fix() {
-	action="${1:-}"; [ -n "${1:-}" ] && shift
-	case "$action" in
-	audio)
-		hdr "Fixing audio..."
-		need_root
-		# Ensure HDA driver is forced (T460 Skylake SOF conflict)
-		echo "options snd_intel_dspcfg dsp_driver=1" > /etc/modprobe.d/snd-hda.conf
-		ok "modprobe config written"
 
-		# Restart pipewire stack as the user (not root)
-		hdr "Restarting pipewire..."
-		printf '#!/bin/sh\npkill wireplumber; pkill pipewire-pulse; pkill pipewire; sleep 1\nXDG_RUNTIME_DIR="/run/user/$(id -u)"\npipewire >/dev/null 2>&1 &\nsleep 0.5; pipewire-pulse >/dev/null 2>&1 &\nsleep 0.5; wireplumber >/dev/null 2>&1 &\nsleep 2; wpctl status\n' > /tmp/chi-fix-audio.sh
-		chmod +x /tmp/chi-fix-audio.sh
-		su mark -c '/tmp/chi-fix-audio.sh' 2>/dev/null | grep -A6 "Sinks:"
-		ok "pipewire restarted — check sinks above"
-		printf "${YEL}note:${RST} if still dummy output, reboot to reload kernel modules\n"
-		;;
-	*)
-		die "fix: unknown target (audio)"
-		;;
-	esac
-}
 
 cmd_pkg() {
 	action="${1:-}"; shift
 	[ -z "$action" ] && die "usage: chitools pkg <search|install|remove|upgrade> [name]"
 	case "$action" in
-	search)  pacman -Ss "$@" ;;
-	install) need_root; pacman -S --noconfirm "$@" && ok "installed: $*" ;;
-	remove)  need_root; pacman -Rns --noconfirm "$@" && ok "removed: $*" ;;
-	upgrade) need_root; pacman -Syu --noconfirm && ok "system upgraded" ;;
+	search)  equery list "$@" ;;
+	install) need_root; emerge "$@" && ok "installed: $*" ;;
+	remove)  need_root; emerge --depclean "$@" && ok "removed: $*" ;;
+	upgrade) need_root; emerge -uDN @world && ok "system upgraded" ;;
 	*)       die "pkg: unknown action (search|install|remove|upgrade)" ;;
 	esac
 }
 
 usage() {
-	printf "${PNK}chitools${RST} — Artix Linux (dinit) management CLI\n\n"
+	printf "${PNK}chitools${RST} — Gentoo (OpenRC) management CLI\n\n"
 	printf "  ${CYN}status${RST}                     system info (uptime, mem, bat, wifi)\n"
 	printf "  ${CYN}build${RST} <target>             build+install (sxwm|dwm|st|dmenu|chifetch|dwmstatus|all)\n"
 	printf "  ${CYN}font${RST} list                  list installed fonts\n"
@@ -613,7 +577,6 @@ pkg)         cmd_pkg "$@" ;;
 wallpaper)   cmd_wallpaper "$@" ;;
 audio)       cmd_audio "$@" ;;
 update)      cmd_update ;;
-fix)         cmd_fix "$@" ;;
 help|--help|-h|"") usage ;;
 *)           die "unknown command: $cmd (run 'chitools help')" ;;
 esac
