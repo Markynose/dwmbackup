@@ -1,7 +1,7 @@
 #!/bin/sh
 # chitools — Gentoo (OpenRC) / femboy management CLI
 
-DWM_SRC="/home/mark/dwm"
+DWM_SRC="/home/mark/dwm-flexipatch"
 ST_SRC="/home/mark/st"
 DMENU_SRC="/home/mark/dmenu"
 
@@ -47,7 +47,10 @@ cmd_build() {
 	dwm)
 		hdr "Building dwm..."
 		need_root
-		cp "$DWM_CFG/config.h" "$DWM_SRC/config.h" || die "config.h not found"
+		[ -f "$DWM_CFG/config.h" ]  || die "config.h not found in $DWM_CFG"
+		[ -f "$DWM_CFG/patches.h" ] || die "patches.h not found in $DWM_CFG"
+		cp "$DWM_CFG/config.h"  "$DWM_SRC/config.h"
+		cp "$DWM_CFG/patches.h" "$DWM_SRC/patches.h"
 		cd "$DWM_SRC" && make && make install && ok "dwm installed"
 		;;
 	st)
@@ -65,9 +68,7 @@ cmd_build() {
 	chifetch)
 		hdr "Building chifetch..."
 		need_root
-		cc -std=c99 -O2 -Wall -o /tmp/chifetch "$DWM_CFG/otherthings/fetch/chifetch.c" \
-			&& cp /tmp/chifetch /usr/local/bin/chifetch \
-			&& ok "chifetch installed"
+		cd "$DWM_CFG/otherthings/fetch" && make && make install && ok "chifetch installed"
 		;;
 	dwmstatus)
 		hdr "Installing dwmstatus..."
