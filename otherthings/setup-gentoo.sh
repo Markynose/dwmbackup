@@ -29,7 +29,7 @@ emerge -av --noreplace \
 	x11-libs/libXScrnSaver \
 	media-libs/fontconfig \
 	media-libs/freetype \
-	app-shells/oksh \
+	app-shells/fish \
 	dev-vcs/git \
 	net-misc/curl \
 	app-arch/unzip \
@@ -67,14 +67,14 @@ chmod 0400 /etc/doas.conf
 # ─── 3. OKSH ──────────────────────────────────────────────────────────────────
 
 echo "==> Setting oksh as shell for ${USERNAME}..."
-if ! grep -q '/bin/oksh' /etc/shells; then
-	echo /bin/oksh >> /etc/shells
+if ! grep -q '/usr/bin/fish' /etc/shells; then
+	echo /usr/bin/fish >> /etc/shells
 fi
-chsh -s /bin/oksh "${USERNAME}"
+chsh -s /usr/bin/fish "${USERNAME}"
 
 cat > /home/${USERNAME}/.profile << 'EOF'
 export PATH="$HOME/.local/bin:$PATH"
-export ENV="$HOME/.okshrc"
+export 
 EOF
 
 cat > /home/${USERNAME}/.okshrc << 'EOF'
