@@ -15,7 +15,7 @@ emerge --sync
 
 echo "==> Enabling guru overlay (for oksh)..."
 emerge --noreplace app-eselect/eselect-repository
-eselect repository enable guru
+eselect repository list | grep -q guru || eselect repository enable guru
 emerge --sync guru
 
 echo "==> Installing dependencies..."
@@ -26,7 +26,7 @@ emerge -av --noreplace \
 	x11-libs/libXft \
 	x11-libs/libXinerama \
 	x11-libs/libXrandr \
-	x11-libs/libXss \
+	x11-libs/libXScrnSaver \
 	media-libs/fontconfig \
 	media-libs/freetype \
 	app-shells/oksh \
@@ -42,7 +42,13 @@ emerge -av --noreplace \
 	x11-apps/xset \
 	x11-misc/xss-lock \
 	media-gfx/feh \
-	x11-apps/xrdb
+	x11-apps/xrdb \
+	media-libs/imlib2 \
+	net-libs/libpcap \
+	media-video/pipewire \
+	dev-libs/readline \
+	media-video/ffmpeg \
+	dev-lang/python
 
 # ─── 2. USER ──────────────────────────────────────────────────────────────────
 
